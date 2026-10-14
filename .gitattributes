@@ -1,0 +1,5 @@
+# Keep LF endings everywhere so .sh scripts run on Linux.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.svg text eol=lf
