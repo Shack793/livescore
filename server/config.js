@@ -1,0 +1,79 @@
+'use strict';
+// server/config.js — zero-dependency .env loader + typed settings.
+const fs = require('fs');
+const path = require('path');
+
+function parseEnv(text) {
+  const out = {};
+  String(text).split(/\r?\n/).forEach((line) => {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (!m || line.trim().startsWith('#')) return;
+    let v = m[2];
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+    else v = v.replace(/\s+#.*$/, '');
+    out[m[1]] = v;
+  });
+  return out;
+}
+
+function loadEnvFile(file) {
+  try {
+    const parsed = parseEnv(fs.readFileSync(file, 'utf8'));
+    Object.keys(parsed).forEach((k) => { if (process.env[k] === undefined) process.env[k] = parsed[k]; });
+  } catch (e) { /* no .env file: rely on real environment */ }
+}
+
+function num(v, d) { const n = Number(v); return Number.isFinite(n) && v !== '' && v != null ? n : d; }
+function bool(v, d) { if (v == null || v === '') return d; return /^(1|true|yes|on)$/i.test(String(v)); }
+
+function load(root, overrides) {
+  root = root || path.join(__dirname, '..');
+  loadEnvFile(path.join(root, '.env'));
+  const e = Object.assign({}, process.env, overrides || {});
+  const cfg = {
+    root: root,
+    env: e.NODE_ENV || 'development',
+    host: e.HOST || '127.0.0.1',
+    port: num(e.PORT, 3000),
+    siteName: e.SITE_NAME || 'LiveScoreNow',
+    siteUrl: (e.SITE_URL || 'http://localhost:' + num(e.PORT, 3000)).replace(/\/+$/, ''),
+    siteTz: e.SITE_TZ || 'Africa/Accra',
+    adminUser: e.ADMIN_USER || 'admin',
+    adminPass: e.ADMIN_PASS || '',
+    dbPath: path.resolve(root, e.DB_PATH || './data/livescorenow.db'),
+    provider: (e.DATA_PROVIDER || 'mock').toLowerCase(),
+    apiFootballKey: e.API_FOOTBALL_KEY || '',
+    apiFootballBase: e.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
+    mockRealtime: bool(e.MOCK_REALTIME, false),
+    defaultCountry: (e.DEFAULT_COUNTRY || '').toUpperCase(),
+    // Only true when running behind your own nginx/Cloudflare: lets us trust X-Forwarded-For and CF-IPCountry.
+    trustProxy: bool(e.TRUST_PROXY, false),
+    allowCcQuery: bool(e.ALLOW_CC_QUERY, (e.NODE_ENV || 'development') !== 'production'),
+    contactEmail: e.CONTACT_EMAIL || '',
+    // Sister community site (Pitchside Forum). Empty = no forum links are shown.
+    forumUrl: (e.FORUM_URL || '').replace(/\/+$/, ''),
+    forumName: e.FORUM_NAME || 'Pitchside Forum',
+    forumMatchUrl: e.FORUM_MATCH_URL || '',   // optional template, e.g. https://forum.com/search?q={query}  ({home} {away} {league} {query})
+    // Origins allowed to put /embed/* widgets in an iframe (space/comma separated). Defaults to the forum's origin.
+    embedOrigins: String(e.EMBED_ORIGINS || '').split(/[\s,]+/).filter(Boolean),
+    syncEnabled: bool(e.SYNC_ENABLED, true),
+    intervals: {
+      liveSec: num(e.LIVE_INTERVAL_SEC, e.DATA_PROVIDER === 'apifootball' ? 20 : 5),
+      fixturesSec: num(e.FIXTURES_INTERVAL_SEC, 300),
+      oddsSec: num(e.ODDS_INTERVAL_SEC, 60),
+      liveOddsSec: num(e.LIVE_ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'apifootball' ? 30 : 10),
+      standingsSec: num(e.STANDINGS_INTERVAL_SEC, 6 * 3600),
+      referenceSec: num(e.REFERENCE_INTERVAL_SEC, 24 * 3600)
+    },
+    windowPastDays: num(e.WINDOW_PAST_DAYS, 3),
+    windowFutureDays: num(e.WINDOW_FUTURE_DAYS, 7),
+    // sports the sync loop pulls (comma separated); real provider only supports football today
+    sports: String(e.SPORTS || '').split(',').map((s) => s.trim()).filter(Boolean),
+    sseMaxPerIp: num(e.SSE_MAX_PER_IP, 8),
+    apiRatePerMin: num(e.API_RATE_PER_MIN, 240)
+  };
+  cfg.isProd = cfg.env === 'production';
+  return cfg;
+}
+
+module.exports = { load, parseEnv };

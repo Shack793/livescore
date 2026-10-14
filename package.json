@@ -1,0 +1,16 @@
+{
+  "name": "livescorenow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live scores, fixtures and region-targeted betting affiliate odds. Zero npm dependencies.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "NODE_ENV=development node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.js",
+    "geoip:update": "node --disable-warning=ExperimentalWarning scripts/update-geoip.js",
+    "provider:check": "node --disable-warning=ExperimentalWarning scripts/provider-check.js",
+    "build:preview": "node scripts/build-preview.js"
+  }
+}

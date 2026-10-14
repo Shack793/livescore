@@ -1,0 +1,103 @@
+# Auto-deploy LiveScoreNow (Node + SQLite backend) to VPS on every push to main.
+#
+# Required GitHub Secrets (repo Settings -> Secrets and variables -> Actions -> New secret):
+#   SSH_HOST = 162.254.38.190
+#   SSH_USER = deploy
+#   SSH_PORT = 22
+#   SSH_KEY  = contents of C:\laragon2\www\PITCHSIDE\deploy_key (same private ED25519 key as Pitchside)
+#
+# One-time server prep (as root) — initial install + deploy rights:
+#   1. Upload this repo to the server and run:  sudo bash deploy/setup.sh livescorenow.xyz you@email.com
+#      (installs Node 22 + nginx site + systemd service + cron backups; Pitchside site is left untouched)
+#   2. Allow the deploy user to publish updates (as root):
+#      cat > /etc/sudoers.d/deploy-livescorenow <<'EOF'
+#      deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart livescorenow, /usr/bin/systemctl reload livescorenow, /usr/bin/systemctl status livescorenow, /usr/bin/systemctl reload nginx, /usr/sbin/nginx -t, /usr/bin/rsync, /bin/tar, /usr/bin/tar, /usr/bin/chown, /usr/bin/chgrp, /usr/bin/chmod, /usr/bin/find
+#      EOF
+#      chmod 440 /etc/sudoers.d/deploy-livescorenow && visudo -c
+#
+# Flow:
+#   1. CI: Node 22 + npm test (73 tests must pass)
+#   2. Copy server/, shared/, public/, scripts/, deploy/, package.json, .env.example
+#      to /home/deploy/livescore-release/ via SCP
+#   3. SSH in: backup code, rsync release -> /opt/livescorenow (keeping .env, data/, backups/),
+#      restart service, reload nginx, health-check. Pitchside (/var/www/pitchside) is never touched.
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # allow manual "Run workflow" from Actions tab
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify site source exists
+        run: |
+          ls -la
+          test -f package.json || (echo "package.json missing" && exit 1)
+          test -f server/index.js || (echo "server/index.js missing — backend not found" && exit 1)
+          test -f server/app.js || (echo "server/app.js missing" && exit 1)
+          test -f deploy/setup.sh || (echo "deploy/setup.sh missing" && exit 1)
+          test -f deploy/nginx.conf || (echo "deploy/nginx.conf missing" && exit 1)
+          test -f deploy/livescorenow.service || (echo "deploy/livescorenow.service missing" && exit 1)
+          du -sh server/ shared/ public/ 2>/dev/null || true
+
+      - name: Copy files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "server,shared,public,scripts,deploy,package.json,.env.example,README.md"
+          target: "/home/deploy/livescore-release/"
+          overwrite: true
+
+      - name: Publish + restart + reload
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          port: ${{ secrets.SSH_PORT }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -euo pipefail
+            STAMP=$(date +%Y%m%d-%H%M%S)
+            APP=/opt/livescorenow
+            REL=/home/deploy/livescore-release
+            [ -d "$APP" ] || { echo "!! $APP not found — run deploy/setup.sh on the server first (as root)."; exit 1; }
+            mkdir -p /opt/livescore-backups
+            tar -czf "/opt/livescore-backups/livescore-code-$STAMP.tar.gz" -C /opt livescorenow --exclude 'livescorenow/data' --exclude 'livescorenow/backups' --exclude 'livescorenow/.env' 2>/dev/null || true
+            ls -1t /opt/livescore-backups/*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f || true
+            echo "Backup: /opt/livescore-backups/livescore-code-$STAMP.tar.gz"
+            sudo /usr/bin/rsync -a --delete --exclude '.env' --exclude 'data/' --exclude 'backups/' --exclude 'dist' --exclude '.git' --exclude 'node_modules' "$REL/server" "$REL/shared" "$REL/public" "$REL/scripts" "$REL/deploy" "$REL/package.json" "$REL/.env.example" "$REL/README.md" "$APP/"
+            sudo cp "$APP/deploy/livescorenow.service" /etc/systemd/system/livescorenow.service 2>/dev/null || true
+            sudo /usr/bin/chown -R root:lsn "$APP/server" "$APP/shared" "$APP/public" "$APP/scripts" "$APP/deploy" "$APP/package.json" 2>/dev/null || true
+            sudo /usr/bin/chown root:lsn "$APP/.env"; sudo /usr/bin/chmod 640 "$APP/.env"
+            sudo /usr/bin/chown -R lsn:lsn "$APP/data" "$APP/backups" 2>/dev/null || true
+            PORT="$(grep '^PORT=' "$APP/.env" | head -1 | cut -d= -f2 | tr -dc 0-9)"; PORT="${PORT:-3100}"
+            sudo /usr/bin/systemctl restart livescorenow
+            sleep 4
+            sudo /usr/bin/systemctl status livescorenow --no-pager || true
+            sudo /usr/sbin/nginx -t
+            sudo /usr/bin/systemctl reload nginx
+            curl -fsS "http://127.0.0.1:${PORT}/" -o /dev/null && echo "Health OK on 127.0.0.1:${PORT}" || (journalctl -u livescorenow -n 30 --no-pager || true; exit 1)
+            echo "Deployed $GITHUB_SHA at $STAMP"
+            echo "Pitchside untouched:"; curl -s -o /dev/null -w "pitchside local HTTP %{http_code}\n" http://127.0.0.1/ || true

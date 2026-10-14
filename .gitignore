@@ -1,0 +1,11 @@
+.env
+node_modules/
+dist/
+*.log
+data/*.db
+data/*.db-*
+backups/
+# deploy keys / certs must never be committed
+*_key
+*_key.pub
+*.pem
