@@ -1,5 +1,7 @@
 # LiveScoreNow
 
+Live at **https://livescorenow.xyz** (sister site: https://www.pitchsideforum.com).
+
 A Flashscore-style live-scores site (no news) built to earn from **banner ads and betting affiliate links**.
 
 * Live scores, fixtures, results, standings, team pages, match pages (events, stats, line-ups, H2H, odds), search, favourites ("My teams"), pinned leagues, light/dark mode, odds format (decimal / fractional / American), time-zone setting. 9 sports.
