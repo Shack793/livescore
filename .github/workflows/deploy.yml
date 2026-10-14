@@ -83,16 +83,17 @@ jobs:
             APP=/opt/livescorenow
             REL=/home/deploy/livescore-release
             [ -d "$APP" ] || { echo "!! $APP not found — run deploy/setup.sh on the server first (as root)."; exit 1; }
-            mkdir -p /opt/livescore-backups
+            mkdir -p /opt/livescore-backups || true
             tar -czf "/opt/livescore-backups/livescore-code-$STAMP.tar.gz" -C /opt livescorenow --exclude 'livescorenow/data' --exclude 'livescorenow/backups' --exclude 'livescorenow/.env' 2>/dev/null || true
             ls -1t /opt/livescore-backups/*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f || true
             echo "Backup: /opt/livescore-backups/livescore-code-$STAMP.tar.gz"
             sudo /usr/bin/rsync -a --delete --exclude '.env' --exclude 'data/' --exclude 'backups/' --exclude 'dist' --exclude '.git' --exclude 'node_modules' "$REL/server" "$REL/shared" "$REL/public" "$REL/scripts" "$REL/deploy" "$REL/package.json" "$REL/.env.example" "$REL/README.md" "$APP/"
-            sudo cp "$APP/deploy/livescorenow.service" /etc/systemd/system/livescorenow.service 2>/dev/null || true
+            sudo /usr/bin/rsync "$APP/deploy/livescorenow.service" /etc/systemd/system/livescorenow.service || true
+            sudo /usr/bin/systemctl daemon-reload || true
             sudo /usr/bin/chown -R root:lsn "$APP/server" "$APP/shared" "$APP/public" "$APP/scripts" "$APP/deploy" "$APP/package.json" 2>/dev/null || true
             sudo /usr/bin/chown root:lsn "$APP/.env"; sudo /usr/bin/chmod 640 "$APP/.env"
             sudo /usr/bin/chown -R lsn:lsn "$APP/data" "$APP/backups" 2>/dev/null || true
-            PORT="$(grep '^PORT=' "$APP/.env" | head -1 | cut -d= -f2 | tr -dc 0-9)"; PORT="${PORT:-3100}"
+            PORT="$(grep '^PORT=' "$APP/.env" 2>/dev/null | head -1 | cut -d= -f2 | tr -dc 0-9 || true)"; PORT="${PORT:-3100}"
             sudo /usr/bin/systemctl restart livescorenow
             sleep 4
             sudo /usr/bin/systemctl status livescorenow --no-pager || true
