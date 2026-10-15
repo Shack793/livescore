@@ -29,12 +29,14 @@
 
 const createMock = require('./mock');
 const createApiFootball = require('./apifootball');
+const createSportmonks = require('./sportmonks');
 
 function create(cfg, log) {
   switch (cfg.provider) {
     case 'mock': return createMock(cfg);
     case 'apifootball': return createApiFootball(cfg, log);
-    default: throw new Error('Unknown DATA_PROVIDER "' + cfg.provider + '". Use "mock" or "apifootball".');
+    case 'sportmonks': return createSportmonks(cfg, log);
+    default: throw new Error('Unknown DATA_PROVIDER "' + cfg.provider + '". Use "mock", "apifootball" or "sportmonks".');
   }
 }
 
