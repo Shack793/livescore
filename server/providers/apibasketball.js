@@ -143,7 +143,15 @@ module.exports = function createApiBasketball(cfg, log) {
       const out = [];
       for (let t = from; t < to; t += 86400) {
         if (lowBudget()) break;
-        const r = await call('/games', { date: ymd(t), timezone: 'UTC' });
+        // Free plans only cover ~yesterday→tomorrow: skip out-of-range days
+        // instead of failing the whole job (paid plans get the full window).
+        let r;
+        try {
+          r = await call('/games', { date: ymd(t), timezone: 'UTC' });
+        } catch (e) {
+          if (/date|plan|season/i.test(e.message)) { logger('fixtures ' + ymd(t) + ' skipped: ' + e.message); continue; }
+          throw e;
+        }
         (r.response || []).forEach((g) => {
           if (!wanted(g.league && g.league.id)) return;
           const m = mapGame(g);
