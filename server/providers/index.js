@@ -1,43 +1,87 @@
 'use strict';
 // server/providers/index.js — data provider registry.
 //
-// A provider is the ONLY thing that knows where scores, fixtures and odds come from. Everything else
-// (database, sync loop, pages, live push, geo-targeting) is provider-agnostic. To add a feed, write a
-// module that returns an object with the methods below and register it in create().
+// Single-sport mode (unchanged): DATA_PROVIDER=mock|apifootball|sportmonks|apibasketball.
 //
-// All methods are async. `ref` values are the provider's own stable string ids.
-//
-//   name, isMock, sports                       identification; sports = ids this provider can serve
-//   referenceData()  -> { sports?, countries:[{code,name,kind?}], leagues:[{ref,sport,countryCode,name,slug?,type,top,season}],
-//                         teams:[{ref,sport,countryCode,name,slug?,logo?}] }
-//   feedBookmakers() -> [{ref,name}]           bookmakers present in the odds feed (admin maps them to affiliates)
-//   fixtures({sport,from,to})  -> [Match]      all matches with kickoff in [from,to) (epoch seconds)
-//   live({sport})    -> [Match]                matches currently in play
-//   matchDetail(match) -> { events, stats, lineups, h2h } | null
-//   standings(league)  -> [{group, rows:[{teamRef, rank, played, won, drawn, lost, gf, ga, points, form, note}]}]
-//   squad(team)        -> [{name, number, pos, age}]
-//   odds({matches, live}) -> [{matchRef, bookmaker, market, selection, value}]
-//   status()           -> optional object shown in the admin (quota, last error, ...)
-//
-// Match = { ref, sport, leagueRef, season, round, homeRef, awayRef, kickoff, status, minute, period,
-//           homeScore, awayScore, htHome, htAway, periods:[{home,away}]|null,
-//           // optional: lets the sync create entities it hasn't seen yet (real feeds discover teams/leagues via fixtures)
-//           league?:{ref,name,countryCode,countryName,type,season,sport}, homeTeam?:{ref,name,logo}, awayTeam?:{ref,name,logo} }
-//   status: 'scheduled' | 'live' | 'halftime' | 'break' | 'finished' | 'postponed' | 'cancelled'
-//
-// markets used by the UI:  '1x2' (1,X,2)   'ml' (1,2)   'ou25' (O,U)   'btts' (Y,N)
-
+// Multi-sport mode: DATA_PROVIDER=multi. Each sport is served by exactly ONE
+// adapter, so feeds can never disagree with each other ("no confusion" rule):
+//   football   -> FOOTBALL_PROVIDER   (default sportmonks; Sportmonks wins every
+//               football duplicate — the API-Sports football product is never used)
+//   basketball -> BASKETBALL_PROVIDER (default off; set apibasketball to enable)
+// Refs are prefixed per feed (sm:, af:, ab:) so entities from different feeds
+// can never collide in the database.
 const createMock = require('./mock');
 const createApiFootball = require('./apifootball');
 const createSportmonks = require('./sportmonks');
+const createApiBasketball = require('./apibasketball');
+
+const BUILDERS = { mock: createMock, apifootball: createApiFootball, sportmonks: createSportmonks, apibasketball: createApiBasketball };
+
+function createOne(name, cfg, log) {
+  const b = BUILDERS[name];
+  if (!b) throw new Error('Unknown provider "' + name + '". Use "mock", "apifootball", "sportmonks" or "apibasketball".');
+  return b(cfg, log);
+}
+
+function createMulti(cfg, log) {
+  const subs = [];
+  const football = createOne(cfg.footballProvider || 'sportmonks', cfg, log);
+  subs.push(football);
+  if (cfg.basketballProvider) subs.push(createOne(cfg.basketballProvider, cfg, log));
+  const bySport = {};
+  subs.forEach((p) => (p.sports || []).forEach((s) => { bySport[s] = p; }));
+  // Ref prefixes per feed (sportmonks sm:, apifootball af:, apibasketball ab:).
+  // Routing prefers the explicit sport field; prefixes are only a fallback.
+  const PREFIX = { sportmonks: ['sm:'], apifootball: ['af:'], apibasketball: ['ab:'], mock: [] };
+  const prefixOf = (p) => Object.keys(PREFIX).filter((k) => p.name.indexOf(k) === 0).flatMap((k) => PREFIX[k]);
+  const byPrefix = {};
+  subs.forEach((p) => prefixOf(p).forEach((x) => { byPrefix[x] = p; }));
+  const sportOf = (o) => {
+    if (o && o.sport && bySport[o.sport]) return bySport[o.sport];
+    const ref = o && (o.ref || o.leagueRef || o.matchRef);
+    if (ref) { const pre = Object.keys(byPrefix).find((x) => String(ref).indexOf(x) === 0); if (pre) return byPrefix[pre]; }
+    return subs[0];
+  };
+  const uniq = (arr, k) => { const seen = {}; return (arr || []).filter((x) => (seen[x[k]] ? false : (seen[x[k]] = true))); };
+  return {
+    name: 'multi(' + subs.map((p) => p.name).join('+') + ')',
+    isMock: false,
+    sports: Object.keys(bySport),
+    status() { const o = { mode: 'multi' }; subs.forEach((p) => { o[p.name] = p.status ? p.status() : null; }); return o; },
+    lowBudget() { return subs.some((p) => p.lowBudget && p.lowBudget()); },
+    async referenceData() {
+      const all = await Promise.all(subs.map((p) => p.referenceData()));
+      return {
+        countries: uniq(all.flatMap((r) => r.countries || []), 'code'),
+        leagues: uniq(all.flatMap((r) => r.leagues || []), 'ref'),
+        teams: uniq(all.flatMap((r) => r.teams || []), 'ref')
+      };
+    },
+    async feedBookmakers() {
+      const all = await Promise.all(subs.map((p) => (p.feedBookmakers ? p.feedBookmakers().catch(() => []) : [])));
+      return uniq(all.flat(), 'ref');
+    },
+    async fixtures({ sport, from, to }) { return bySport[sport] ? bySport[sport].fixtures({ sport, from, to }) : []; },
+    async live({ sport }) { return bySport[sport] ? bySport[sport].live({ sport }) : []; },
+    async matchDetail(match) { return sportOf(match).matchDetail(match); },
+    async standings(league) { return sportOf(league).standings(league); },
+    async squad(team) { return sportOf(team).squad(team); },
+    async odds({ matches, live }) {
+      const groups = {};
+      (matches || []).forEach((m) => { const p = sportOf(m); (groups[p.name] = groups[p.name] || { p, list: [] }).list.push(m); });
+      const out = [];
+      for (const k of Object.keys(groups)) {
+        const r = await groups[k].p.odds({ matches: groups[k].list, live }).catch(() => []);
+        (r || []).forEach((o) => out.push(o));
+      }
+      return out;
+    }
+  };
+}
 
 function create(cfg, log) {
-  switch (cfg.provider) {
-    case 'mock': return createMock(cfg);
-    case 'apifootball': return createApiFootball(cfg, log);
-    case 'sportmonks': return createSportmonks(cfg, log);
-    default: throw new Error('Unknown DATA_PROVIDER "' + cfg.provider + '". Use "mock", "apifootball" or "sportmonks".');
-  }
+  if ((cfg.provider || '') === 'multi') return createMulti(cfg, log);
+  return createOne(cfg.provider, cfg, log);
 }
 
 module.exports = { create };

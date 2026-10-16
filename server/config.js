@@ -42,6 +42,19 @@ function load(root, overrides) {
     adminPass: e.ADMIN_PASS || '',
     dbPath: path.resolve(root, e.DB_PATH || './data/livescorenow.db'),
     provider: (e.DATA_PROVIDER || 'mock').toLowerCase(),
+    // Multi-sport mode (DATA_PROVIDER=multi): each sport has exactly ONE feed.
+    // Football always stays on Sportmonks (it wins every duplicate); basketball
+    // comes from API-Sports when BASKETBALL_PROVIDER=apibasketball.
+    footballProvider: (e.FOOTBALL_PROVIDER || 'sportmonks').toLowerCase(),
+    basketballProvider: (e.BASKETBALL_PROVIDER || '').toLowerCase(),
+    apiSportsKey: e.API_SPORTS_KEY || '',
+    // Comma-separated API-Basketball league IDs to follow (empty = all active leagues, e.g. 12 NBA).
+    basketballLeagues: String(e.BASKETBALL_LEAGUES || '').split(',').map((s) => Number(s.trim())).filter((n) => n > 0),
+    // Free API-Sports quota is 100 req/day per sport: throttle basketball hard.
+    // Lower both after upgrading basketball to a paid plan.
+    basketballFixturesSec: num(e.BASKETBALL_FIXTURES_SEC, 21600),
+    basketballLiveSec: num(e.BASKETBALL_LIVE_SEC, 3600),
+    basketballOdds: bool(e.BASKETBALL_ODDS, false),
     apiFootballKey: e.API_FOOTBALL_KEY || '',
     apiFootballBase: e.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
     sportmonksToken: e.SPORTMONKS_TOKEN || '',
