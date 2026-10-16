@@ -72,7 +72,7 @@ function create({ db, provider, cfg, hub, log }) {
       (ref.teams || []).forEach((t) => upTeam(t, t.sport));
     });
     const fb = await provider.feedBookmakers();
-    db.tx(() => (fb || []).forEach((b) => db.run('INSERT INTO feed_bookmakers (ref,name,seen_at) VALUES (?,?,?) ON CONFLICT(ref) DO UPDATE SET name=excluded.name, seen_at=excluded.seen_at', b.ref, b.name, nowSec())));
+    db.tx(() => ((fb || []).filter((b) => b && b.ref && b.name) || []).forEach((b) => db.run('INSERT INTO feed_bookmakers (ref,name,seen_at) VALUES (?,?,?) ON CONFLICT(ref) DO UPDATE SET name=excluded.name, seen_at=excluded.seen_at', b.ref, b.name, nowSec())));
     status.counts.leagues = ids.league.size; status.counts.teams = ids.team.size;
   }
 
