@@ -77,6 +77,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_KEY }}
+          envs: GITHUB_SHA
           script: |
             set -euo pipefail
             STAMP=$(date +%Y%m%d-%H%M%S)
@@ -100,5 +101,5 @@ jobs:
             sudo /usr/sbin/nginx -t
             sudo /usr/bin/systemctl reload nginx
             curl -fsS "http://127.0.0.1:${PORT}/" -o /dev/null && echo "Health OK on 127.0.0.1:${PORT}" || (journalctl -u livescorenow -n 30 --no-pager || true; exit 1)
-            echo "Deployed $GITHUB_SHA at $STAMP"
+            echo "Deployed ${GITHUB_SHA:-unknown} at $STAMP"
             echo "Pitchside untouched:"; curl -s -o /dev/null -w "pitchside local HTTP %{http_code}\n" http://127.0.0.1/ || true
