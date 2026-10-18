@@ -14,12 +14,13 @@ const createMock = require('./mock');
 const createApiFootball = require('./apifootball');
 const createSportmonks = require('./sportmonks');
 const createApiBasketball = require('./apibasketball');
+const createFailover = require('./failover');
 
-const BUILDERS = { mock: createMock, apifootball: createApiFootball, sportmonks: createSportmonks, apibasketball: createApiBasketball };
+const BUILDERS = { mock: createMock, apifootball: createApiFootball, sportmonks: createSportmonks, apibasketball: createApiBasketball, failover: createFailover };
 
 function createOne(name, cfg, log) {
   const b = BUILDERS[name];
-  if (!b) throw new Error('Unknown provider "' + name + '". Use "mock", "apifootball", "sportmonks" or "apibasketball".');
+  if (!b) throw new Error('Unknown provider "' + name + '". Use "mock", "apifootball", "sportmonks", "apibasketball" or "failover".');
   return b(cfg, log);
 }
 

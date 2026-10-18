@@ -208,9 +208,18 @@ module.exports = function createSportmonks(cfg, log) {
     },
 
     async fixtures({ from, to }) {
-      const r = await call('/football/fixtures/between/' + ymd(from) + '/' + ymd(to),
-        Object.assign({ include: 'league;participants;scores' }, leagueFilter()));
-      return (r.data || []).map(mapMatch).filter((m) => m.kickoff && m.kickoff >= from && m.kickoff < to);
+      // Sportmonks paginates (25 per page by default), so walk every page or we
+      // would only ever load the first slice of the requested window.
+      const out = [];
+      let page = 1, more = true;
+      while (more && page <= 40) {
+        const r = await call('/football/fixtures/between/' + ymd(from) + '/' + ymd(to),
+          Object.assign({ include: 'league;participants;scores', per_page: 50, page: String(page) }, leagueFilter()));
+        (r.data || []).forEach((f) => { const m = mapMatch(f); if (m.kickoff && m.kickoff >= from && m.kickoff < to) out.push(m); });
+        more = !!(r.pagination && r.pagination.has_more);
+        page++;
+      }
+      return out;
     },
 
     async live() {

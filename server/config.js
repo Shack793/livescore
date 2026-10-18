@@ -57,6 +57,10 @@ function load(root, overrides) {
     basketballOdds: bool(e.BASKETBALL_ODDS, false),
     apiFootballKey: e.API_FOOTBALL_KEY || '',
     apiFootballBase: e.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
+    // DATA_PROVIDER=failover: primary football feed first, fall back to the other
+    // when its daily quota runs out (see providers/failover.js).
+    failoverPrimary: (e.FAILOVER_PRIMARY || 'apifootball').toLowerCase(),
+    failoverSecondary: (e.FAILOVER_SECONDARY || 'sportmonks').toLowerCase(),
     sportmonksToken: e.SPORTMONKS_TOKEN || '',
     sportmonksBase: e.SPORTMONKS_BASE || 'https://api.sportmonks.com/v3',
     // Comma-separated Sportmonks league IDs to follow (empty = every league in your plan).

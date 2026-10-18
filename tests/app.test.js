@@ -12,7 +12,7 @@ async function get(p, opts) { const r = await fetch(base + p, Object.assign({ re
 
 test.before(async () => {
   dbFile = path.join(os.tmpdir(), 'lsn-test-' + process.pid + '-' + Date.now() + '.db');
-  S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: dbFile, ADMIN_PASS: 'pw123', SYNC_ENABLED: 'false', NODE_ENV: 'test' } });
+  S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: dbFile, ADMIN_PASS: 'pw123', SYNC_ENABLED: 'false', NODE_ENV: 'test', DATA_PROVIDER: 'mock', ALLOW_CC_QUERY: 'true' } });
   base = 'http://127.0.0.1:' + S.port;
 });
 test.after(async () => { await S.close(); ['', '-wal', '-shm'].forEach((x) => { try { fs.unlinkSync(dbFile + x); } catch (e) { /* ignore */ } }); });

@@ -10,6 +10,9 @@
 // until you add adapters for them). Auth header: x-apisports-key. Base: https://v3.football.api-sports.io
 const { slugify } = require('../../shared/util');
 
+// Pre-match odds are paginated per day. Each page is one API call, so this cap
+// keeps the daily quota bounded (see README on the 7,500 calls/day plan).
+const ODDS_MAX_PAGES = 5;
 const STATUS = {
   TBD: 'scheduled', NS: 'scheduled',
   '1H': 'live', '2H': 'live', ET: 'live', BT: 'live', P: 'live', LIVE: 'live',
@@ -224,7 +227,7 @@ module.exports = function createApiFootball(cfg, log) {
       for (const day of Object.keys(days)) {
         if (lowBudget()) break;
         let page = 1, total = 1;
-        while (page <= total && page <= 20) {
+        while (page <= total && page <= ODDS_MAX_PAGES) {
           const r = await call('/odds', { date: day, page: String(page) });
           total = (r.paging && r.paging.total) || 1;
           (r.response || []).forEach((o) => {

@@ -18,9 +18,39 @@ function create({ db, provider, cfg, hub, log }) {
   const nowSec = () => Math.floor(Date.now() / 1000);
 
   function warm() {
+    ids.country.clear(); ids.league.clear(); ids.team.clear(); ids.match.clear();
     db.all('SELECT code,id FROM countries').forEach((r) => ids.country.set(r.code, r.id));
     db.all('SELECT ref,id FROM leagues').forEach((r) => ids.league.set(r.ref, r.id));
     db.all('SELECT ref,id FROM teams').forEach((r) => ids.team.set(r.ref, r.id));
+  }
+
+  /* ---------- feed failover (apifootball <-> sportmonks) ---------- */
+  const FEED_PREFIX = { apifootball: 'af:', sportmonks: 'sm:', apibasketball: 'ab:', mock: '' };
+  const prefixOf = (feed) => FEED_PREFIX[feed] || '';
+  // A match is never shown twice: when the active feed changes, drop the rows that
+  // belong to the feed we just left (matches/teams/leagues and their odds/details).
+  function purgeFeed(prefix) {
+    if (!prefix) return;
+    const like = prefix + '%';
+    db.tx(() => {
+      db.run('DELETE FROM odds_current WHERE match_id IN (SELECT id FROM matches WHERE ref LIKE ?)', like);
+      db.run('DELETE FROM match_details WHERE match_id IN (SELECT id FROM matches WHERE ref LIKE ?)', like);
+      db.run('DELETE FROM standings WHERE league_id IN (SELECT id FROM leagues WHERE ref LIKE ?)', like);
+      db.run('DELETE FROM squads WHERE team_id IN (SELECT id FROM teams WHERE ref LIKE ?)', like);
+      db.run('DELETE FROM matches WHERE ref LIKE ?', like);
+      db.run('DELETE FROM teams WHERE ref LIKE ?', like);
+      db.run('DELETE FROM leagues WHERE ref LIKE ?', like);
+    });
+    for (const ref of Array.from(states.keys())) if (ref.indexOf(prefix) === 0) states.delete(ref);
+    warm();
+  }
+  function handlePendingSwitch() {
+    if (!provider.takeSwitch) return false;
+    const s = provider.takeSwitch();
+    if (!s) return false;
+    log('data feed switched ' + s.from + ' -> ' + s.to + ': clearing ' + s.from + ' data');
+    purgeFeed(prefixOf(s.from));
+    return true;
   }
 
   /* ---------- entity upserts ---------- */
@@ -66,12 +96,14 @@ function create({ db, provider, cfg, hub, log }) {
   /* ---------- reference ---------- */
   async function reference() {
     const ref = await provider.referenceData();
+    log('reference: ' + ((ref.countries || []).length) + ' countries, ' + ((ref.leagues || []).length) + ' leagues, ' + ((ref.teams || []).length) + ' teams pulled');
     db.tx(() => {
       (ref.countries || []).forEach(upCountry);
       (ref.leagues || []).forEach((l) => { upLeague(l); db.run('UPDATE leagues SET name=?, season=?, type=? WHERE ref=?', l.name, l.season || '', l.type || 'league', l.ref); });
       (ref.teams || []).forEach((t) => upTeam(t, t.sport));
     });
     const fb = await provider.feedBookmakers();
+    log('bookmakers: ' + ((fb || []).length) + ' pulled');
     db.tx(() => ((fb || []).filter((b) => b && b.ref && b.name) || []).forEach((b) => db.run('INSERT INTO feed_bookmakers (ref,name,seen_at) VALUES (?,?,?) ON CONFLICT(ref) DO UPDATE SET name=excluded.name, seen_at=excluded.seen_at', b.ref, b.name, nowSec())));
     status.counts.leagues = ids.league.size; status.counts.teams = ids.team.size;
   }
@@ -124,6 +156,7 @@ function create({ db, provider, cfg, hub, log }) {
       const ch = upMatches(list);
       if (ch.length && hub) hub.matchesChanged(ch);
     }
+    log('fixtures: ' + n + ' matches pulled');
     status.counts.fixturesLastRun = n;
   }
 
@@ -133,6 +166,7 @@ function create({ db, provider, cfg, hub, log }) {
     for (const sport of sports()) all = all.concat(await provider.live({ sport }));
     const ch = upMatches(all);
     if (ch.length && hub) hub.matchesChanged(ch);
+    log('live: ' + all.length + ' live matches pulled');
     status.counts.live = all.length;
     // anything we think is live but the feed no longer lists: refresh via fixtures soon
     const stale = db.get("SELECT COUNT(*) n FROM matches WHERE status IN ('live','halftime','break') AND updated_at < ?", nowSec() - 120).n;
@@ -155,8 +189,9 @@ function create({ db, provider, cfg, hub, log }) {
       if (!old) { db.run('INSERT INTO odds_current (match_id,bookmaker_ref,market,selection,value,prev,updated_at) VALUES (?,?,?,?,?,?,?)', mid, o.bookmaker, o.market, o.selection, o.value, null, t); changed.add(mid); }
       else if (old.value !== o.value) { db.run('UPDATE odds_current SET prev=?, value=?, updated_at=? WHERE match_id=? AND bookmaker_ref=? AND market=? AND selection=?', old.value, o.value, t, mid, o.bookmaker, o.market, o.selection); changed.add(mid); }
     }));
-    if (changed.size && hub) hub.oddsChanged(Array.from(changed));
+    log('odds: ' + out.length + ' pulled (' + changed.size + ' changed)');
     status.counts.oddsRows = out.length;
+    if (changed.size && hub && hub.oddsChanged) hub.oddsChanged(Array.from(changed));
   }
 
   /* ---------- standings (scheduled for top leagues; any other league is fetched on demand when a page needs it) ---------- */
@@ -171,6 +206,7 @@ function create({ db, provider, cfg, hub, log }) {
     const lgs = db.all("SELECT id,ref,sport,name FROM leagues WHERE active=1 AND type='league'" + (provider.isMock ? '' : ' AND top=1') + ' ORDER BY top DESC');
     let n = 0;
     for (const l of lgs) { try { if (await fetchStandings(l)) n++; } catch (e) { log('standings ' + l.ref + ': ' + e.message); } }
+    log('standings: ' + n + ' leagues pulled');
     status.counts.standings = n;
   }
   const stInflight = new Map();
@@ -262,7 +298,7 @@ function create({ db, provider, cfg, hub, log }) {
   function loop(name) {
     if (stopped) return;
     const job = JOBS[name];
-    const tick = async () => { await runJob(name); if (!stopped) { const t = setTimeout(tick, Math.max(2, job.every()) * 1000); t.unref && t.unref(); timers.push(t); } };
+    const tick = async () => { handlePendingSwitch(); await runJob(name); if (!stopped) { const t = setTimeout(tick, Math.max(2, job.every()) * 1000); t.unref && t.unref(); timers.push(t); } };
     tick();
   }
   // Switching from the demo provider to a real one: remove the simulated data (and the demo bookmakers that point at
@@ -283,7 +319,11 @@ function create({ db, provider, cfg, hub, log }) {
     if (db.get('SELECT COUNT(*) n FROM leagues').n === 0 || (cfg.syncEnabled && !provider.isMock)) await runJob('reference');
     else if (provider.isMock) await runJob('reference');
     db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('data_mode', ?)", provider.isMock ? 'mock' : 'live');
-    await runJob('fixtures'); await runJob('live'); await runJob('odds');
+    await runJob('fixtures'); await runJob('live');
+    // If the primary feed's quota was already spent, the calls above switched to the
+    // fallback: clear the old feed's rows BEFORE fetching odds/standings for the new one.
+    handlePendingSwitch();
+    await runJob('odds');
     runJob('standings');
     if (!cfg.syncEnabled) return;
     ['reference', 'fixtures', 'standings', 'live', 'odds', 'liveOdds', 'cleanup'].forEach((n, i) => { const t = setTimeout(() => loop(n), 1500 + i * 400); t.unref && t.unref(); timers.push(t); });

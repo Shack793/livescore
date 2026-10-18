@@ -7,7 +7,7 @@ const { start } = require('../server/index');
 
 async function boot(extra) {
   const dbFile = path.join(os.tmpdir(), 'lsn-forum-' + process.pid + '-' + Math.random().toString(36).slice(2) + '.db');
-  const S = await start({ log: () => {}, env: Object.assign({ PORT: '0', DB_PATH: dbFile, ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test' }, extra) });
+  const S = await start({ log: () => {}, env: Object.assign({ PORT: '0', DB_PATH: dbFile, ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test', DATA_PROVIDER: 'mock', ALLOW_CC_QUERY: 'true' }, extra) });
   const base = 'http://127.0.0.1:' + S.port;
   const get = async (p) => { const r = await fetch(base + p); return { status: r.status, headers: r.headers, text: await r.text() }; };
   const close = async () => { await S.close(); ['', '-wal', '-shm'].forEach((x) => { try { fs.unlinkSync(dbFile + x); } catch (e) { /* ignore */ } }); };
