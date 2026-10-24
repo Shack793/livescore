@@ -1,38 +1,36 @@
 'use strict';
 // server/providers/index.js — data provider registry.
 //
-// Single-sport mode (unchanged): DATA_PROVIDER=mock|apifootball|sportmonks|apibasketball.
+// Single-sport mode: DATA_PROVIDER=mock|apifootball|apibasketball.
 //
 // Multi-sport mode: DATA_PROVIDER=multi. Each sport is served by exactly ONE
 // adapter, so feeds can never disagree with each other ("no confusion" rule):
-//   football   -> FOOTBALL_PROVIDER   (sportmonks | apifootball | failover)
+//   football   -> FOOTBALL_PROVIDER   (apifootball)
 //   basketball -> BASKETBALL_PROVIDER (default off; set apibasketball to enable)
-// Refs are prefixed per feed (sm:, af:, ab:) so entities from different feeds
+// Refs are prefixed per feed (af:, ab:) so entities from different feeds
 // can never collide in the database.
 const createMock = require('./mock');
 const createApiFootball = require('./apifootball');
-const createSportmonks = require('./sportmonks');
 const createApiBasketball = require('./apibasketball');
-const createFailover = require('./failover');
 
-const BUILDERS = { mock: createMock, apifootball: createApiFootball, sportmonks: createSportmonks, apibasketball: createApiBasketball, failover: createFailover };
+const BUILDERS = { mock: createMock, apifootball: createApiFootball, apibasketball: createApiBasketball };
 
 function createOne(name, cfg, log) {
   const b = BUILDERS[name];
-  if (!b) throw new Error('Unknown provider "' + name + '". Use "mock", "apifootball", "sportmonks", "apibasketball" or "failover".');
+  if (!b) throw new Error('Unknown provider "' + name + '". Use "mock", "apifootball" or "apibasketball".');
   return b(cfg, log);
 }
 
 function createMulti(cfg, log) {
   const subs = [];
-  const football = createOne(cfg.footballProvider || 'sportmonks', cfg, log);
+  const football = createOne(cfg.footballProvider || 'apifootball', cfg, log);
   subs.push(football);
   if (cfg.basketballProvider) subs.push(createOne(cfg.basketballProvider, cfg, log));
   const bySport = {};
   subs.forEach((p) => (p.sports || []).forEach((s) => { bySport[s] = p; }));
-  // Ref prefixes per feed (sportmonks sm:, apifootball af:, apibasketball ab:).
+  // Ref prefixes per feed (apifootball af:, apibasketball ab:).
   // Routing prefers the explicit sport field; prefixes are only a fallback.
-  const PREFIX = { sportmonks: ['sm:'], apifootball: ['af:'], apibasketball: ['ab:'], mock: [] };
+  const PREFIX = { apifootball: ['af:'], apibasketball: ['ab:'], mock: [] };
   const prefixOf = (p) => Object.keys(PREFIX).filter((k) => p.name.indexOf(k) === 0).flatMap((k) => PREFIX[k]);
   const byPrefix = {};
   subs.forEach((p) => prefixOf(p).forEach((x) => { byPrefix[x] = p; }));
@@ -49,12 +47,7 @@ function createMulti(cfg, log) {
     sports: Object.keys(bySport),
     status() { const o = { mode: 'multi' }; subs.forEach((p) => { o[p.name] = p.status ? p.status() : null; }); return o; },
     lowBudget() { return subs.some((p) => p.lowBudget && p.lowBudget()); },
-    // Failover lives inside the football sub-provider; sync needs to see its
-    // feed switches so it can clear the outgoing feed's rows.
-    takeSwitch() {
-      const f = subs.find((p) => typeof p.takeSwitch === 'function');
-      return f ? f.takeSwitch() : null;
-    },
+    feedPrefixes() { return subs.flatMap((p) => prefixOf(p)); },
     async referenceData() {
       const all = await Promise.all(subs.map((p) => p.referenceData()));
       return {

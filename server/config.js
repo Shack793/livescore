@@ -43,10 +43,9 @@ function load(root, overrides) {
     dbPath: path.resolve(root, e.DB_PATH || './data/livescorenow.db'),
     provider: (e.DATA_PROVIDER || 'mock').toLowerCase(),
     // Multi-sport mode (DATA_PROVIDER=multi): each sport has exactly ONE feed.
-    // Football comes from FOOTBALL_PROVIDER (sportmonks, apifootball, or failover
-    // for API-Football + Sportmonks quota fallback); basketball comes from
+    // Football comes from FOOTBALL_PROVIDER=apifootball; basketball comes from
     // API-Sports when BASKETBALL_PROVIDER=apibasketball.
-    footballProvider: (e.FOOTBALL_PROVIDER || 'sportmonks').toLowerCase(),
+    footballProvider: (e.FOOTBALL_PROVIDER || 'apifootball').toLowerCase(),
     basketballProvider: (e.BASKETBALL_PROVIDER || '').toLowerCase(),
     // API-Sports sells every sport under one account key; API_SPORTS_KEY is the
     // explicit name, API_FOOTBALL_KEY is the historical one. Accept both.
@@ -66,15 +65,6 @@ function load(root, overrides) {
     basketballOddsMax: num(e.BASKETBALL_ODDS_MAX, 12),
     apiFootballKey: e.API_FOOTBALL_KEY || '',
     apiFootballBase: e.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
-    // DATA_PROVIDER=failover: primary football feed first, fall back to the other
-    // when its daily quota runs out (see providers/failover.js).
-    failoverPrimary: (e.FAILOVER_PRIMARY || 'apifootball').toLowerCase(),
-    failoverSecondary: (e.FAILOVER_SECONDARY || 'sportmonks').toLowerCase(),
-    sportmonksToken: e.SPORTMONKS_TOKEN || '',
-    sportmonksBase: e.SPORTMONKS_BASE || 'https://api.sportmonks.com/v3',
-    // Comma-separated Sportmonks league IDs to follow (empty = every league in your plan).
-    // Ours: 8 EPL, 82 Bundesliga, 301 Ligue 1, 384 Serie A, 564 La Liga.
-    sportmonksLeagues: String(e.SPORTMONKS_LEAGUES || '').split(',').map((s) => Number(s.trim())).filter((n) => n > 0),
     mockRealtime: bool(e.MOCK_REALTIME, false),
     defaultCountry: (e.DEFAULT_COUNTRY || '').toUpperCase(),
     // Only true when running behind your own nginx/Cloudflare: lets us trust X-Forwarded-For and CF-IPCountry.
@@ -89,10 +79,10 @@ function load(root, overrides) {
     embedOrigins: String(e.EMBED_ORIGINS || '').split(/[\s,]+/).filter(Boolean),
     syncEnabled: bool(e.SYNC_ENABLED, true),
     intervals: {
-      liveSec: num(e.LIVE_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 15 : e.DATA_PROVIDER === 'apifootball' ? 20 : e.DATA_PROVIDER === 'multi' ? 20 : 5),
+      liveSec: num(e.LIVE_INTERVAL_SEC, e.DATA_PROVIDER === 'apifootball' ? 20 : e.DATA_PROVIDER === 'multi' ? 20 : 5),
       fixturesSec: num(e.FIXTURES_INTERVAL_SEC, e.DATA_PROVIDER === 'multi' ? 600 : 300),
-      oddsSec: num(e.ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 600 : e.DATA_PROVIDER === 'multi' ? 300 : 60),
-      liveOddsSec: num(e.LIVE_ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 60 : e.DATA_PROVIDER === 'apifootball' ? 30 : e.DATA_PROVIDER === 'multi' ? 60 : 10),
+      oddsSec: num(e.ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'multi' ? 300 : 60),
+      liveOddsSec: num(e.LIVE_ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'apifootball' ? 30 : e.DATA_PROVIDER === 'multi' ? 60 : 10),
       standingsSec: num(e.STANDINGS_INTERVAL_SEC, 6 * 3600),
       referenceSec: num(e.REFERENCE_INTERVAL_SEC, 24 * 3600)
     },

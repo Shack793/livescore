@@ -24,11 +24,13 @@ function create({ db, provider, cfg, hub, log }) {
     db.all('SELECT ref,id FROM teams').forEach((r) => ids.team.set(r.ref, r.id));
   }
 
-  /* ---------- feed failover (apifootball <-> sportmonks) ---------- */
-  const FEED_PREFIX = { apifootball: 'af:', sportmonks: 'sm:', apibasketball: 'ab:', mock: '' };
+  /* ---------- feed cleanup ---------- */
+  // sportmonks is legacy-only here: it is no longer an active provider, but its
+  // old rows must be removed once after switching to API-Football.
+  const FEED_PREFIX = { apifootball: 'af:', apibasketball: 'ab:', sportmonks: 'sm:', mock: '' };
   const prefixOf = (feed) => FEED_PREFIX[feed] || '';
-  // A match is never shown twice: when the active feed changes, drop the rows that
-  // belong to the feed we just left (matches/teams/leagues and their odds/details).
+  // Drop rows that belong to a feed we no longer use (matches/teams/leagues and
+  // their odds/details). This keeps old feed data from duplicating fixtures.
   function purgeFeed(prefix) {
     if (!prefix) return;
     const like = prefix + '%';
@@ -44,13 +46,11 @@ function create({ db, provider, cfg, hub, log }) {
     for (const ref of Array.from(states.keys())) if (ref.indexOf(prefix) === 0) states.delete(ref);
     warm();
   }
-  function handlePendingSwitch() {
-    if (!provider.takeSwitch) return false;
-    const s = provider.takeSwitch();
-    if (!s) return false;
-    log('data feed switched ' + s.from + ' -> ' + s.to + ': clearing ' + s.from + ' data');
-    purgeFeed(prefixOf(s.from));
-    return true;
+  function activePrefixes() {
+    if (provider.feedPrefixes) return provider.feedPrefixes();
+    const feed = provider.activeFeed ? provider.activeFeed() : provider.name;
+    const p = prefixOf(feed);
+    return p ? [p] : [];
   }
 
   /* ---------- entity upserts ---------- */
@@ -303,7 +303,7 @@ function create({ db, provider, cfg, hub, log }) {
   function loop(name) {
     if (stopped) return;
     const job = JOBS[name];
-    const tick = async () => { handlePendingSwitch(); await runJob(name); if (!stopped) { const t = setTimeout(tick, Math.max(2, job.every()) * 1000); t.unref && t.unref(); timers.push(t); } };
+    const tick = async () => { await runJob(name); if (!stopped) { const t = setTimeout(tick, Math.max(2, job.every()) * 1000); t.unref && t.unref(); timers.push(t); } };
     tick();
   }
   // Switching from the demo provider to a real one: remove the simulated data (and the demo bookmakers that point at
@@ -319,16 +319,15 @@ function create({ db, provider, cfg, hub, log }) {
     });
   }
   // A restart forgets which feed the previous process used, so rows left behind by the
-  // other feed would linger and duplicate fixtures on their days. Keep only the active feed.
+  // other feed would linger and duplicate fixtures on their days. Keep only active feeds.
   function purgeOtherFeeds() {
-    const feed = provider.activeFeed ? provider.activeFeed() : provider.name;
-    const keep = prefixOf(feed);
-    if (!keep) return; // mock or unknown provider: nothing to purge
+    const keep = activePrefixes();
+    if (!keep.length) return; // mock or unknown provider: nothing to purge
     Object.keys(FEED_PREFIX).forEach((f) => {
       const p = FEED_PREFIX[f];
-      if (!p || p === keep) return;
+      if (!p || keep.includes(p)) return;
       const n = db.get('SELECT COUNT(*) n FROM matches WHERE ref LIKE ?', p + '%').n;
-      if (n) { log('purging ' + n + ' stale ' + f + ' matches (active feed: ' + feed + ')'); purgeFeed(p); }
+      if (n) { log('purging ' + n + ' stale ' + f + ' matches (active feeds: ' + keep.join(',') + ')'); purgeFeed(p); }
     });
   }
   async function start() {
@@ -339,9 +338,6 @@ function create({ db, provider, cfg, hub, log }) {
     else if (provider.isMock) await runJob('reference');
     db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('data_mode', ?)", provider.isMock ? 'mock' : 'live');
     await runJob('fixtures'); await runJob('live');
-    // If the primary feed's quota was already spent, the calls above switched to the
-    // fallback: clear the old feed's rows BEFORE fetching odds/standings for the new one.
-    handlePendingSwitch();
     await runJob('odds');
     runJob('standings');
     if (!cfg.syncEnabled) return;

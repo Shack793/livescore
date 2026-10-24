@@ -1,6 +1,6 @@
 'use strict';
 // Local verification of the API-Sports football + basketball feeds (read-only).
-// Env needed: DATA_PROVIDER=multi, FOOTBALL_PROVIDER=failover (or apifootball),
+// Env needed: DATA_PROVIDER=multi, FOOTBALL_PROVIDER=apifootball,
 // BASKETBALL_PROVIDER=apibasketball, API_SPORTS_KEY (or API_FOOTBALL_KEY).
 const config = require('../server/config');
 const providers = require('../server/providers');
