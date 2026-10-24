@@ -130,7 +130,12 @@ function create({ db, provider, cfg, hub, log }) {
       return { id, created: true };
     }
     ids.match.set(m.ref, old.id);
-    if (sigOf(old) === sigOf(row)) return { id: old.id, changed: false };
+    if (sigOf(old) === sigOf(row)) {
+      // A live match can be quiet for minutes (no goal, no card). Keep updated_at fresh so the
+      // stale-live check below does not mistake it for a match the feed has dropped.
+      if (LIVE.includes(row.status)) db.run('UPDATE matches SET updated_at=? WHERE id=?', nowSec(), old.id);
+      return { id: old.id, changed: false };
+    }
     db.run('UPDATE matches SET status=?,minute=?,period=?,hs=?,as_=?,hths=?,htas=?,periods=?,kickoff=?,round=?,updated_at=? WHERE id=?',
       row.status, row.minute, row.period, row.hs, row.as_, row.hths, row.htas, periods, row.kickoff, row.round, nowSec(), old.id);
     return { id: old.id, changed: true };
@@ -170,7 +175,7 @@ function create({ db, provider, cfg, hub, log }) {
     status.counts.live = all.length;
     // anything we think is live but the feed no longer lists: refresh via fixtures soon
     const stale = db.get("SELECT COUNT(*) n FROM matches WHERE status IN ('live','halftime','break') AND updated_at < ?", nowSec() - 120).n;
-    if (stale && nowSec() - lastStaleFix > 60) { lastStaleFix = nowSec(); fixtures().catch((e) => log('fixtures (stale-live) failed: ' + e.message)); }
+    if (stale && nowSec() - lastStaleFix > Math.max(300, cfg.intervals.fixturesSec)) { lastStaleFix = nowSec(); fixtures().catch((e) => log('fixtures (stale-live) failed: ' + e.message)); }
   }
 
   /* ---------- odds ---------- */
@@ -203,7 +208,7 @@ function create({ db, provider, cfg, hub, log }) {
     return true;
   }
   async function standings() {
-    const lgs = db.all("SELECT id,ref,sport,name FROM leagues WHERE active=1 AND type='league'" + (provider.isMock ? '' : ' AND top=1') + ' ORDER BY top DESC');
+    const lgs = db.all("SELECT id,ref,sport,name,season FROM leagues WHERE active=1 AND type='league'" + (provider.isMock ? '' : ' AND top=1') + ' ORDER BY top DESC');
     let n = 0;
     for (const l of lgs) { try { if (await fetchStandings(l)) n++; } catch (e) { log('standings ' + l.ref + ': ' + e.message); } }
     log('standings: ' + n + ' leagues pulled');
@@ -211,7 +216,7 @@ function create({ db, provider, cfg, hub, log }) {
   }
   const stInflight = new Map();
   async function ensureStandings(leagueId) {
-    const l = db.get("SELECT id,ref,sport,name,type FROM leagues WHERE id=? AND type='league'", leagueId);
+    const l = db.get("SELECT id,ref,sport,name,type,season FROM leagues WHERE id=? AND type='league'", leagueId);
     if (!l) return;
     const f = db.get('SELECT fetched_at FROM standings WHERE league_id=?', leagueId);
     if (f && nowSec() - f.fetched_at < cfg.intervals.standingsSec) return;
@@ -313,8 +318,22 @@ function create({ db, provider, cfg, hub, log }) {
       demo.forEach((b) => { db.run('DELETE FROM bookmaker_geo WHERE bookmaker_id=?', b.id); db.run('DELETE FROM bookmakers WHERE id=?', b.id); });
     });
   }
+  // A restart forgets which feed the previous process used, so rows left behind by the
+  // other feed would linger and duplicate fixtures on their days. Keep only the active feed.
+  function purgeOtherFeeds() {
+    const feed = provider.activeFeed ? provider.activeFeed() : provider.name;
+    const keep = prefixOf(feed);
+    if (!keep) return; // mock or unknown provider: nothing to purge
+    Object.keys(FEED_PREFIX).forEach((f) => {
+      const p = FEED_PREFIX[f];
+      if (!p || p === keep) return;
+      const n = db.get('SELECT COUNT(*) n FROM matches WHERE ref LIKE ?', p + '%').n;
+      if (n) { log('purging ' + n + ' stale ' + f + ' matches (active feed: ' + feed + ')'); purgeFeed(p); }
+    });
+  }
   async function start() {
     purgeDemoIfSwitched();
+    purgeOtherFeeds();
     warm();
     if (db.get('SELECT COUNT(*) n FROM leagues').n === 0 || (cfg.syncEnabled && !provider.isMock)) await runJob('reference');
     else if (provider.isMock) await runJob('reference');

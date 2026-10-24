@@ -69,7 +69,7 @@ then `npm run provider:check` (read-only) and `systemctl restart livescorenow`. 
 
 * The API-Football adapter (`server/providers/apifootball.js`) was written from the public v3 documentation and **has not been run against a live key**. `npm run provider:check` shows what each endpoint returns so you can confirm it maps correctly; all field mapping is in that one file.
 * **Live (in-play) odds per bookmaker** depend on your API plan and on what the provider returns; if live odds arrive without a bookmaker name, they cannot be matched to your affiliate partners. Pre-match odds per bookmaker are the safe path. Verify with `provider:check` and a plan that includes odds.
-* **Only football has a real adapter.** Basketball, tennis, hockey, etc. run on demo data only. For real data in those sports add a provider module (the contract is documented at the top of `server/providers/index.js`; about 150 lines per feed) — or set `SPORTS=football` in `.env` and the other tabs will simply be empty.
+* **Football and basketball have real adapters.** Football uses API-Football (`server/providers/apifootball.js`, with automatic Sportmonks failover when its daily quota runs out); basketball uses API-Basketball (`server/providers/apibasketball.js`, Pro plan: fixtures, live scores, standings, squads, H2H and winner odds). Tennis, hockey, etc. still run on demo data. For real data there, add a provider module (the contract is documented at the top of `server/providers/index.js`) — or set `SPORTS=football,basketball` in `.env` and the other tabs will simply be empty.
 * **API quota.** Defaults poll live scores every 20s and live odds every 30s. Raise `LIVE_INTERVAL_SEC` etc. if your plan has a low daily limit; the admin dashboard shows each job's last run and errors.
 * Pull odds **from the same feed for all visitors** and let the region rules decide who sees which bookmaker. If a bookmaker gives you its own odds/affiliate feed, write a small provider that returns `{matchRef, bookmaker, market, selection, value}` rows (see the contract) — nothing else in the site needs to change.
 
@@ -131,7 +131,7 @@ Pages are rendered on the server (good for SEO and every page view is an ad impr
 
 * No news feed (by request), no user accounts, no background push notifications (alerts work while the site is open in a tab; true push when the site is closed can be added later without accounts, using Web Push), no player pages, no FIFA/ranking tables, no multi-language UI.
 * The real adapter supplies standings for football leagues only (cup groups/knockouts are not modelled).
-* Only football has a real-data adapter; other sports are demo-only until you add feeds.
+* Football (API-Football/Sportmonks) and basketball (API-Basketball) have real-data adapters; other sports are demo-only until you add feeds. Basketball v1 has no events/statistics/lineups endpoints, so those match-page tabs stay empty.
 * Odds are indicative only and the site is not a bookmaker; show the bookmaker's own terms.
 
 ## Linking with Pitchside Forum

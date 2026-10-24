@@ -1,17 +1,15 @@
 'use strict';
 // server/providers/apibasketball.js — basketball feed via API-Sports Basketball v1.
 //
-// Field mapping verified live against the account key (2026-10-15, Free plan):
-//   /games (by date + live), /leagues (428), /standings, /players, /games?h2h=.
-// No team-statistics, lineup or odds coverage was returned for the probed games,
-// so matchDetail returns events/stats/lineups empty (honest "not available" states)
-// and odds() stays off until coverage appears (see BASKETBALL_ODDS below).
+// Verified live against the account key (2026-10-24, Pro plan, 7,500 calls/day):
+//   /games (by date + by id + h2h), /leagues, /standings, /players, /odds?game=.
+// Basketball v1 has NO /games/events, /games/statistics or /odds/bookmakers
+// endpoint, so matchDetail returns honest empty events/stats/lineups and
+// feedBookmakers() discovers bookmakers from a real odds response instead.
 //
-// QUOTA: the Free plan allows 100 requests/day for this API. The sync loop calls
-// fixtures()/live() often, so this adapter throttles itself: fixtures refetch at
-// most every BASKETBALL_FIXTURES_SEC (default 6h, ~10 calls) and live at most
-// every BASKETBALL_LIVE_SEC (default 1h, 1 call). That is TEST cadence — upgrade
-// the basketball product to a paid plan and lower both values for real live scores.
+// QUOTA: the Pro plan allows 7,500 requests/day for this API. Polling cadence is
+// controlled by BASKETBALL_FIXTURES_SEC / BASKETBALL_LIVE_SEC, and per-game odds
+// are cached, so the sync loop stays well inside the daily budget.
 const { slugify } = require('../../shared/util');
 
 const STATUS = {
@@ -22,7 +20,7 @@ const STATUS = {
   POST: 'postponed', PST: 'postponed', SUSP: 'postponed', INT: 'postponed',
   CANC: 'cancelled', ABD: 'cancelled'
 };
-// Flagged as "top" (Top leagues menu + scheduled standings). Edit freely in Admin → Leagues.
+// Flagged as "top" (Top leagues menu + scheduled standings + odds). Edit freely in Admin → Leagues.
 const TOP_IDS = new Set([12]); // NBA
 const POS = { 'Point Guard': 'PG', 'Shooting Guard': 'SG', 'Small Forward': 'SF', 'Power Forward': 'PF', Center: 'C', Guard: 'G', Forward: 'F' };
 
@@ -32,24 +30,35 @@ function statusOf(short) {
   return 'scheduled';
 }
 
+function periodOf(short) {
+  const q = /^Q([1-4])/i.exec(short || '');
+  if (q) return Number(q[1]);
+  if (/^(OT|ET)$/i.test(short || '')) return 5;
+  return null;
+}
+
 module.exports = function createApiBasketball(cfg, log) {
-  const base = 'https://v1.basketball.api-sports.io';
-  const key = cfg.apiSportsKey;
+  const base = cfg.basketballBase || 'https://v1.basketball.api-sports.io';
+  const key = cfg.apiSportsKey || cfg.apiFootballKey;
   const leagueIds = (cfg.basketballLeagues || []).map(Number).filter((n) => n > 0);
-  const fixSec = Math.max(300, cfg.basketballFixturesSec || 21600);
-  const liveSec = Math.max(60, cfg.basketballLiveSec || 3600);
+  const minGap = Math.max(250, cfg.basketballMinGapMs || 1000);
+  const fixSec = Math.max(300, cfg.basketballFixturesSec || 900);
+  const liveSec = Math.max(30, cfg.basketballLiveSec || 60);
   const oddsOn = !!cfg.basketballOdds;
+  const oddsTtl = Math.max(60, cfg.basketballOddsSec || 600) * 1000;
+  const oddsMax = Math.max(1, cfg.basketballOddsMax || 12);
   const st = { calls: 0, remaining: null, limit: null, lastError: null, lastOk: null };
   const logger = log || (() => {});
+  const oddsCache = new Map(); // game id -> { at, rows }
+  const feedBk = new Map();    // bookmaker id -> name
   let lastFixtures = 0, lastLive = 0, lastCallAt = 0;
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   async function call(path, params) {
     if (!key) throw new Error('API_SPORTS_KEY is not set');
-    // Free plan: 10 requests/minute. Pace all calls so bursts can never 429.
     const gap = Date.now() - lastCallAt;
-    if (gap < 6500) await sleep(6500 - gap);
+    if (gap < minGap) await sleep(minGap - gap);
     lastCallAt = Date.now();
     const qs = new URLSearchParams(params || {}).toString();
     const url = base + path + (qs ? '?' + qs : '');
@@ -70,7 +79,7 @@ module.exports = function createApiBasketball(cfg, log) {
     st.lastOk = Date.now(); st.lastError = null;
     return body;
   }
-  const lowBudget = () => st.remaining != null && st.remaining < 20;
+  const lowBudget = () => st.remaining != null && st.remaining < 50;
   const wanted = (id) => !leagueIds.length || leagueIds.includes(Number(id));
   const ymd = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
 
@@ -82,7 +91,8 @@ module.exports = function createApiBasketball(cfg, log) {
 
   function mapGame(g) {
     const lg = g.league || {}, tm = g.teams || {}, sc = g.scores || {};
-    const status = statusOf(g.status && g.status.short);
+    const short = g.status && g.status.short;
+    const status = statusOf(short);
     const hs = sc.home || {}, as = sc.away || {};
     const notStarted = status === 'scheduled' || status === 'postponed' || status === 'cancelled';
     const periods = ['quarter_1', 'quarter_2', 'quarter_3', 'quarter_4'].map((q) => ({ home: hs[q], away: as[q] }))
@@ -92,7 +102,7 @@ module.exports = function createApiBasketball(cfg, log) {
     return {
       ref: 'ab:' + g.id, sport: 'basketball', leagueRef: 'ab:l' + lg.id, season: String(lg.season || ''),
       round: g.stage || g.week || '', homeRef: 'ab:t' + (tm.home && tm.home.id), awayRef: 'ab:t' + (tm.away && tm.away.id),
-      kickoff: g.timestamp, status, minute: null, period: null,
+      kickoff: g.timestamp, status, minute: null, period: periodOf(short),
       homeScore: notStarted ? null : (hs.total == null ? 0 : hs.total),
       awayScore: notStarted ? null : (as.total == null ? 0 : as.total),
       htHome: null, htAway: null, periods: periods.length ? periods : null,
@@ -100,6 +110,34 @@ module.exports = function createApiBasketball(cfg, log) {
       homeTeam: { ref: 'ab:t' + (tm.home && tm.home.id), name: tm.home && tm.home.name, logo: tm.home && tm.home.logo },
       awayTeam: { ref: 'ab:t' + (tm.away && tm.away.id), name: tm.away && tm.away.name, logo: tm.away && tm.away.logo }
     };
+  }
+
+  function collectBookmakers(body) {
+    ((body && body.response) || []).forEach((o) => {
+      (o.bookmakers || []).forEach((b) => { if (b && b.id && b.name) feedBk.set(b.id, b.name); });
+    });
+  }
+
+  function oddsRowsOf(gameId, body) {
+    const out = [];
+    collectBookmakers(body);
+    ((body && body.response) || []).forEach((o) => {
+      (o.bookmakers || []).forEach((b) => {
+        (b.bets || []).forEach((bet) => {
+          const name = String(bet.name || '');
+          // Main winner market only (the site's odds UI supports 'ml' for basketball).
+          if (!/^(home\/away|winner|moneyline|match winner|to win)$/i.test(name)) return;
+          (bet.values || []).forEach((v) => {
+            const odd = parseFloat(v.odd);
+            if (!isFinite(odd) || odd <= 1) return;
+            const selection = /^home$/i.test(v.value) ? '1' : /^away$/i.test(v.value) ? '2' : null;
+            if (!selection) return;
+            out.push({ matchRef: 'ab:' + gameId, bookmaker: 'ab:b' + b.id, market: 'ml', selection, value: odd });
+          });
+        });
+      });
+    });
+    return out;
   }
 
   return {
@@ -131,10 +169,21 @@ module.exports = function createApiBasketball(cfg, log) {
     },
 
     async feedBookmakers() {
+      if (feedBk.size) return Array.from(feedBk, ([id, name]) => ({ ref: 'ab:b' + id, name }));
+      // Basketball v1 has no /odds/bookmakers endpoint; discover from a real odds response.
       try {
         const r = await call('/odds/bookmakers');
-        return (r.response || []).map((b) => ({ ref: 'ab:b' + b.id, name: b.name }));
-      } catch (e) { logger('feedBookmakers: ' + e.message); return []; }
+        (r.response || []).forEach((b) => { if (b && b.id && b.name) feedBk.set(b.id, b.name); });
+      } catch (e) { /* endpoint absent on this API */ }
+      if (!feedBk.size) {
+        try {
+          const today = ymd(Math.floor(Date.now() / 1000));
+          const g = await call('/games', { date: today, timezone: 'UTC' });
+          const first = (g.response || []).find((x) => wanted(x.league && x.league.id));
+          if (first) collectBookmakers(await call('/odds', { game: first.id }));
+        } catch (e) { logger('feedBookmakers: ' + e.message); }
+      }
+      return Array.from(feedBk, ([id, name]) => ({ ref: 'ab:b' + id, name }));
     },
 
     async fixtures({ from, to }) {
@@ -143,12 +192,12 @@ module.exports = function createApiBasketball(cfg, log) {
       const out = [];
       for (let t = from; t < to; t += 86400) {
         if (lowBudget()) break;
-        // Free plans only cover ~yesterday→tomorrow: skip out-of-range days
-        // instead of failing the whole job (paid plans get the full window).
         let r;
         try {
           r = await call('/games', { date: ymd(t), timezone: 'UTC' });
         } catch (e) {
+          // Paid plans cover the full window; on a limited plan skip out-of-range
+          // days instead of failing the whole job.
           if (/date|plan|season/i.test(e.message)) { logger('fixtures ' + ymd(t) + ' skipped: ' + e.message); continue; }
           throw e;
         }
@@ -162,8 +211,8 @@ module.exports = function createApiBasketball(cfg, log) {
       return out;
     },
 
-    // No reliable live-only endpoint in Basketball v1: pull today's games once
-    // per throttle window and keep the in-play ones. Deterministic and quota-cheap.
+    // Basketball v1 has no live=all filter: pull today's games once per throttle
+    // window and keep the in-play ones. Deterministic and quota-cheap.
     async live() {
       if (Date.now() - lastLive < liveSec * 1000) return [];
       if (lowBudget()) return [];
@@ -181,7 +230,7 @@ module.exports = function createApiBasketball(cfg, log) {
       if (ids[0] && ids[1] && ids[0] !== ids[1]) {
         hh = await call('/games', { h2h: ids[0] + '-' + ids[1] }).catch(() => ({ response: [] }));
       }
-      const h2h = (hh.response || []).slice(-5).map((f) => {
+      const h2h = (hh.response || []).slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 5).map((f) => {
         const tm = f.teams || {}, sc = f.scores || {};
         return {
           date: f.timestamp || null, home: tm.home && tm.home.name || '', away: tm.away && tm.away.name || '',
@@ -189,7 +238,7 @@ module.exports = function createApiBasketball(cfg, log) {
           competition: (f.league && f.league.name) || ''
         };
       });
-      // No event, team-stat or lineup coverage in Basketball v1 (verified 2026-10-15).
+      // Basketball v1 exposes no events/statistics/lineups endpoints (verified 2026-10-24).
       return { events: [], stats: [], lineups: null, h2h };
     },
 
@@ -200,11 +249,12 @@ module.exports = function createApiBasketball(cfg, log) {
       const byGroup = {};
       rows.forEach((x) => {
         const g = (x.group && x.group.name) || '';
+        const won = x.games && x.games.win && x.games.win.total || 0;
         (byGroup[g] = byGroup[g] || []).push({
           teamRef: 'ab:t' + (x.team && x.team.id), rank: x.position,
-          played: x.games && x.games.played || 0, won: x.games && x.games.win && x.games.win.total || 0, drawn: 0,
+          played: x.games && x.games.played || 0, won, drawn: 0,
           lost: x.games && x.games.lose && x.games.lose.total || 0,
-          gf: x.points && x.points.for || 0, ga: x.points && x.points.against || 0, points: 0,
+          gf: x.points && x.points.for || 0, ga: x.points && x.points.against || 0, points: won,
           form: (x.form || '').slice(-5),
           note: /playoff|promotion|champion/i.test(x.description || '') ? 'q1' : /relegation/i.test(x.description || '') ? 'rel' : ''
         });
@@ -215,11 +265,12 @@ module.exports = function createApiBasketball(cfg, log) {
     async squad(team) {
       const id = String(team.ref).replace(/^ab:t/, '');
       // /players requires a season; try the most likely current seasons first.
-      // Squad results are cached 24h per team, so this costs at most 3 calls/day/team.
+      // Squad results are cached 24h per team, so this costs at most 4 calls/day/team.
       const now = new Date(), y = now.getUTCFullYear();
       const guess = now.getUTCMonth() >= 7 ? y + '-' + (y + 1) : (y - 1) + '-' + y;
-      // Free plans only cover older seasons: fall back to recent ones (stale squad beats none).
-      const cands = Array.from(new Set([guess, '2024-2025', '2023-2024', '2022-2023'])).slice(0, 4);
+      // Some competitions use calendar-year seasons ("2026"), others span two
+      // years ("2026-2027"), so try both shapes before giving up.
+      const cands = Array.from(new Set([guess, String(y), (y - 1) + '-' + y, String(y - 1), '2024-2025'])).slice(0, 5);
       for (const season of cands) {
         try {
           const r = await call('/players', { team: id, season });
@@ -232,12 +283,43 @@ module.exports = function createApiBasketball(cfg, log) {
       return [];
     },
 
-    // No odds coverage returned for basketball (verified 2026-10-15). Stay silent
-    // to protect the 100/day free quota; set BASKETBALL_ODDS=true once covered.
-    async odds() {
+    // Per-game odds (Basketball v1 only supports ?game=), cached and capped.
+    // Only the winner ('ml') market is published: the site's basketball board
+    // shows 1/2, and mapping a total would need a different UI market.
+    async odds({ matches }) {
       if (!oddsOn) return [];
       if (lowBudget()) return [];
-      return [];
+      const wantedRefs = new Set();
+      const out = [];
+      let fetched = 0;
+      for (const m of matches || []) {
+        const ref = String(m && m.ref || '');
+        if (ref.indexOf('ab:') !== 0 || wantedRefs.has(ref)) continue;
+        wantedRefs.add(ref);
+        if (m.sport && m.sport !== 'basketball') continue;
+        const leagueId = Number(String(m.leagueRef || '').replace(/^ab:l/, ''));
+        // Keep odds to top competitions (NBA) so 7,500/day is never at risk.
+        if (!TOP_IDS.has(leagueId)) continue;
+        const id = ref.slice(3);
+        const cached = oddsCache.get(id);
+        if (cached && Date.now() - cached.at < oddsTtl) { (cached.rows || []).forEach((x) => out.push(x)); continue; }
+        if (fetched >= oddsMax) continue;
+        fetched++;
+        try {
+          const r = await call('/odds', { game: id });
+          const rows = oddsRowsOf(id, r);
+          oddsCache.set(id, { at: Date.now(), rows });
+          rows.forEach((x) => out.push(x));
+        } catch (e) {
+          if (/quota|limit/i.test(e.message)) break;
+          logger('odds ' + ref + ': ' + e.message);
+        }
+      }
+      if (oddsCache.size > 500) {
+        const keep = Date.now() - oddsTtl;
+        for (const [id, v] of oddsCache) if (v.at < keep) oddsCache.delete(id);
+      }
+      return out;
     }
   };
 };

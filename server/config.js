@@ -43,18 +43,27 @@ function load(root, overrides) {
     dbPath: path.resolve(root, e.DB_PATH || './data/livescorenow.db'),
     provider: (e.DATA_PROVIDER || 'mock').toLowerCase(),
     // Multi-sport mode (DATA_PROVIDER=multi): each sport has exactly ONE feed.
-    // Football always stays on Sportmonks (it wins every duplicate); basketball
-    // comes from API-Sports when BASKETBALL_PROVIDER=apibasketball.
+    // Football comes from FOOTBALL_PROVIDER (sportmonks, apifootball, or failover
+    // for API-Football + Sportmonks quota fallback); basketball comes from
+    // API-Sports when BASKETBALL_PROVIDER=apibasketball.
     footballProvider: (e.FOOTBALL_PROVIDER || 'sportmonks').toLowerCase(),
     basketballProvider: (e.BASKETBALL_PROVIDER || '').toLowerCase(),
-    apiSportsKey: e.API_SPORTS_KEY || '',
+    // API-Sports sells every sport under one account key; API_SPORTS_KEY is the
+    // explicit name, API_FOOTBALL_KEY is the historical one. Accept both.
+    apiSportsKey: e.API_SPORTS_KEY || e.API_FOOTBALL_KEY || '',
+    basketballBase: (e.BASKETBALL_BASE || 'https://v1.basketball.api-sports.io').replace(/\/+$/, ''),
     // Comma-separated API-Basketball league IDs to follow (empty = all active leagues, e.g. 12 NBA).
     basketballLeagues: String(e.BASKETBALL_LEAGUES || '').split(',').map((s) => Number(s.trim())).filter((n) => n > 0),
-    // Free API-Sports quota is 100 req/day per sport: throttle basketball hard.
-    // Lower both after upgrading basketball to a paid plan.
-    basketballFixturesSec: num(e.BASKETBALL_FIXTURES_SEC, 21600),
-    basketballLiveSec: num(e.BASKETBALL_LIVE_SEC, 3600),
-    basketballOdds: bool(e.BASKETBALL_ODDS, false),
+    // Minimum gap between API-Basketball calls. Pro plans allow far more than
+    // the Free plan's 10/min, so 1 s keeps bursts safe without slowing sync much.
+    basketballMinGapMs: num(e.BASKETBALL_MIN_GAP_MS, 1000),
+    basketballFixturesSec: num(e.BASKETBALL_FIXTURES_SEC, 900),
+    basketballLiveSec: num(e.BASKETBALL_LIVE_SEC, 60),
+    basketballOdds: bool(e.BASKETBALL_ODDS, true),
+    // Odds per game are cached this long (seconds) and each sync pass fetches at
+    // most BASKETBALL_ODDS_MAX games, so live odds never eat the daily quota.
+    basketballOddsSec: num(e.BASKETBALL_ODDS_SEC, 600),
+    basketballOddsMax: num(e.BASKETBALL_ODDS_MAX, 12),
     apiFootballKey: e.API_FOOTBALL_KEY || '',
     apiFootballBase: e.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
     // DATA_PROVIDER=failover: primary football feed first, fall back to the other
@@ -80,10 +89,10 @@ function load(root, overrides) {
     embedOrigins: String(e.EMBED_ORIGINS || '').split(/[\s,]+/).filter(Boolean),
     syncEnabled: bool(e.SYNC_ENABLED, true),
     intervals: {
-      liveSec: num(e.LIVE_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 15 : e.DATA_PROVIDER === 'apifootball' ? 20 : 5),
-      fixturesSec: num(e.FIXTURES_INTERVAL_SEC, 300),
-      oddsSec: num(e.ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 600 : 60),
-      liveOddsSec: num(e.LIVE_ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 60 : e.DATA_PROVIDER === 'apifootball' ? 30 : 10),
+      liveSec: num(e.LIVE_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 15 : e.DATA_PROVIDER === 'apifootball' ? 20 : e.DATA_PROVIDER === 'multi' ? 20 : 5),
+      fixturesSec: num(e.FIXTURES_INTERVAL_SEC, e.DATA_PROVIDER === 'multi' ? 600 : 300),
+      oddsSec: num(e.ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 600 : e.DATA_PROVIDER === 'multi' ? 300 : 60),
+      liveOddsSec: num(e.LIVE_ODDS_INTERVAL_SEC, e.DATA_PROVIDER === 'sportmonks' ? 60 : e.DATA_PROVIDER === 'apifootball' ? 30 : e.DATA_PROVIDER === 'multi' ? 60 : 10),
       standingsSec: num(e.STANDINGS_INTERVAL_SEC, 6 * 3600),
       referenceSec: num(e.REFERENCE_INTERVAL_SEC, 24 * 3600)
     },

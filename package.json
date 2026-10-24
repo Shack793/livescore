@@ -11,6 +11,7 @@
     "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.js",
     "geoip:update": "node --disable-warning=ExperimentalWarning scripts/update-geoip.js",
     "provider:check": "node --disable-warning=ExperimentalWarning scripts/provider-check.js",
+    "verify:apisports": "node --disable-warning=ExperimentalWarning scripts/verify-apibasketball.js",
     "build:preview": "node scripts/build-preview.js"
   }
 }

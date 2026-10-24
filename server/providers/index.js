@@ -5,8 +5,7 @@
 //
 // Multi-sport mode: DATA_PROVIDER=multi. Each sport is served by exactly ONE
 // adapter, so feeds can never disagree with each other ("no confusion" rule):
-//   football   -> FOOTBALL_PROVIDER   (default sportmonks; Sportmonks wins every
-//               football duplicate — the API-Sports football product is never used)
+//   football   -> FOOTBALL_PROVIDER   (sportmonks | apifootball | failover)
 //   basketball -> BASKETBALL_PROVIDER (default off; set apibasketball to enable)
 // Refs are prefixed per feed (sm:, af:, ab:) so entities from different feeds
 // can never collide in the database.
@@ -50,6 +49,12 @@ function createMulti(cfg, log) {
     sports: Object.keys(bySport),
     status() { const o = { mode: 'multi' }; subs.forEach((p) => { o[p.name] = p.status ? p.status() : null; }); return o; },
     lowBudget() { return subs.some((p) => p.lowBudget && p.lowBudget()); },
+    // Failover lives inside the football sub-provider; sync needs to see its
+    // feed switches so it can clear the outgoing feed's rows.
+    takeSwitch() {
+      const f = subs.find((p) => typeof p.takeSwitch === 'function');
+      return f ? f.takeSwitch() : null;
+    },
     async referenceData() {
       const all = await Promise.all(subs.map((p) => p.referenceData()));
       return {

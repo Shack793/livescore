@@ -38,25 +38,40 @@ module.exports = function createApiFootball(cfg, log) {
   const st = { calls: 0, remaining: null, limit: null, lastError: null, lastOk: null };
   const logger = log || { info() {}, warn() {}, error() {} };
 
-  async function call(path, params) {
-    if (!key) throw new Error('API_FOOTBALL_KEY is not set');
-    const qs = new URLSearchParams(params || {}).toString();
-    const url = base + path + (qs ? '?' + qs : '');
-    st.calls++;
-    let res;
-    try {
-      res = await fetch(url, { headers: { 'x-apisports-key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
-    } catch (e) { st.lastError = 'network: ' + e.message; throw e; }
-    const rem = res.headers.get('x-ratelimit-requests-remaining'), lim = res.headers.get('x-ratelimit-requests-limit');
-    if (rem != null) st.remaining = Number(rem);
-    if (lim != null) st.limit = Number(lim);
-    if (!res.ok) { st.lastError = 'HTTP ' + res.status + ' ' + path; throw new Error('API-Football HTTP ' + res.status + ' for ' + path); }
-    const body = await res.json();
-    const errs = body && body.errors;
-    const hasErr = errs && (Array.isArray(errs) ? errs.length : Object.keys(errs).length);
-    if (hasErr) { const msg = JSON.stringify(errs); st.lastError = msg; throw new Error('API-Football error for ' + path + ': ' + msg); }
-    st.lastOk = Date.now(); st.lastError = null;
-    return body;
+  // Serialize calls and leave a gap so a burst (standings backfill, crawlers
+  // opening many league pages) can never exceed the per-minute subscription
+  // limit: 250 ms => at most 240 calls/min.
+  const MIN_GAP = 250;
+  let queue = Promise.resolve();
+  let lastAt = 0;
+
+  function call(path, params) {
+    const exec = async () => {
+      const wait = Math.max(0, lastAt + MIN_GAP - Date.now());
+      if (wait) await new Promise((r) => setTimeout(r, wait));
+      lastAt = Date.now();
+      if (!key) throw new Error('API_FOOTBALL_KEY is not set');
+      const qs = new URLSearchParams(params || {}).toString();
+      const url = base + path + (qs ? '?' + qs : '');
+      st.calls++;
+      let res;
+      try {
+        res = await fetch(url, { headers: { 'x-apisports-key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
+      } catch (e) { st.lastError = 'network: ' + e.message; throw e; }
+      const rem = res.headers.get('x-ratelimit-requests-remaining'), lim = res.headers.get('x-ratelimit-requests-limit');
+      if (rem != null) st.remaining = Number(rem);
+      if (lim != null) st.limit = Number(lim);
+      if (!res.ok) { st.lastError = 'HTTP ' + res.status + ' ' + path; throw new Error('API-Football HTTP ' + res.status + ' for ' + path); }
+      const body = await res.json();
+      const errs = body && body.errors;
+      const hasErr = errs && (Array.isArray(errs) ? errs.length : Object.keys(errs).length);
+      if (hasErr) { const msg = JSON.stringify(errs); st.lastError = msg; throw new Error('API-Football error for ' + path + ': ' + msg); }
+      st.lastOk = Date.now(); st.lastError = null;
+      return body;
+    };
+    const p = queue.then(exec, exec);
+    queue = p.then(() => {}, () => {});
+    return p;
   }
   const lowBudget = () => st.remaining != null && st.remaining < 150;
 
