@@ -101,6 +101,7 @@ module.exports = function createApiFootball(cfg, log) {
     name: 'apifootball',
     isMock: false,
     sports: ['football'],
+    prefix: 'af:',
     status() { return { calls: st.calls, remaining: st.remaining, limit: st.limit, lastOk: st.lastOk ? new Date(st.lastOk).toISOString() : null, lastError: st.lastError, keySet: !!key }; },
     lowBudget,
     _call: call, // used by scripts/provider-check.js

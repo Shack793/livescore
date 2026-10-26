@@ -97,10 +97,35 @@ test('a failing provider call is recorded and does not crash the loop', async ()
   await sync.start();
   provider.live = async () => { throw new Error('API down'); };
   const s = await sync.runJob('live');
-  assert.strictEqual(s.lastError, 'API down');
+  assert.match(s.lastError, /API down/);
   assert.ok(s.errors >= 1);
   const again = await sync.runJob('live');
-  assert.strictEqual(again.lastError, 'API down');
+  assert.match(again.lastError, /API down/);
+});
+
+test('one failing sport does not stop live updates for the other sports', async () => {
+  const { sync, provider } = setup();
+  await sync.start();
+  const real = provider.live;
+  provider.live = async ({ sport }) => {
+    if (sport === 'football') throw new Error('football feed down');
+    return real({ sport });
+  };
+  const s = await sync.runJob('live');
+  assert.strictEqual(s.lastError, '');
+  assert.strictEqual(s.errors, 0);
+});
+
+test('a future fixture left as live is reset to scheduled', async () => {
+  const { db, sync, provider } = setup();
+  await sync.start();
+  provider.isMock = false;
+  const m = db.get("SELECT id FROM matches WHERE status='scheduled' LIMIT 1");
+  const now = Math.floor(Date.now() / 1000);
+  db.run("UPDATE matches SET status='live', minute=12, hs=1, as_=0, kickoff=?, updated_at=? WHERE id=?", now + 86400 * 30, now, m.id);
+  await sync.live();
+  const row = db.get('SELECT status,minute,hs,as_ FROM matches WHERE id=?', m.id);
+  assert.deepStrictEqual({ ...row }, { status: 'scheduled', minute: null, hs: null, as_: null });
 });
 
 test('feed bookmakers map to affiliate bookmakers by provider_ref; list odds follow region rules', async () => {
@@ -127,6 +152,16 @@ test('cleanup removes old matches and their odds', async () => {
   await sync.runJob('cleanup');
   assert.strictEqual(db.get('SELECT COUNT(*) n FROM matches').n, before - 1);
   assert.strictEqual(db.get('SELECT COUNT(*) n FROM odds_current WHERE match_id NOT IN (SELECT id FROM matches)').n, 0);
+});
+
+test('sports without a configured feed are hidden from navigation', async () => {
+  const { db, cfg } = setup();
+  const fake = { name: 'apifootball', isMock: false, sports: ['football'], referenceData: async () => ({ countries: [], leagues: [], teams: [] }), feedBookmakers: async () => [], fixtures: async () => [], live: async () => [], odds: async () => [], standings: async () => [] };
+  const s2 = syncMod.create({ db, provider: fake, cfg, hub: null, log: () => {} });
+  await s2.start();
+  assert.strictEqual(db.get("SELECT active FROM sports WHERE id='football'").active, 1);
+  assert.strictEqual(db.get("SELECT active FROM sports WHERE id='tennis'").active, 0);
+  assert.strictEqual(db.get("SELECT active FROM sports WHERE id='basketball'").active, 0);
 });
 
 test('switching from demo to a real provider purges simulated data and demo bookmakers (keeps custom ones)', async () => {

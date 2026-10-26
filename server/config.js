@@ -43,10 +43,16 @@ function load(root, overrides) {
     dbPath: path.resolve(root, e.DB_PATH || './data/livescorenow.db'),
     provider: (e.DATA_PROVIDER || 'mock').toLowerCase(),
     // Multi-sport mode (DATA_PROVIDER=multi): each sport has exactly ONE feed.
-    // Football comes from FOOTBALL_PROVIDER=apifootball; basketball comes from
-    // API-Sports when BASKETBALL_PROVIDER=apibasketball.
+    // Every API-Sports provider below is on by default; set one to an empty value
+    // to switch that sport off. One failing feed never blocks the others.
     footballProvider: (e.FOOTBALL_PROVIDER || 'apifootball').toLowerCase(),
-    basketballProvider: (e.BASKETBALL_PROVIDER || '').toLowerCase(),
+    basketballProvider: (e.BASKETBALL_PROVIDER || 'apibasketball').toLowerCase(),
+    baseballProvider: (e.BASEBALL_PROVIDER || 'apibaseball').toLowerCase(),
+    hockeyProvider: (e.HOCKEY_PROVIDER || 'apihockey').toLowerCase(),
+    handballProvider: (e.HANDBALL_PROVIDER || 'apihandball').toLowerCase(),
+    rugbyProvider: (e.RUGBY_PROVIDER || 'apirugby').toLowerCase(),
+    volleyballProvider: (e.VOLLEYBALL_PROVIDER || 'apivolleyball').toLowerCase(),
+    americanFootballProvider: (e.AMERICAN_FOOTBALL_PROVIDER || 'apiamericanfootball').toLowerCase(),
     // API-Sports sells every sport under one account key; API_SPORTS_KEY is the
     // explicit name, API_FOOTBALL_KEY is the historical one. Accept both.
     apiSportsKey: e.API_SPORTS_KEY || e.API_FOOTBALL_KEY || '',
@@ -63,6 +69,18 @@ function load(root, overrides) {
     // most BASKETBALL_ODDS_MAX games, so live odds never eat the daily quota.
     basketballOddsSec: num(e.BASKETBALL_ODDS_SEC, 600),
     basketballOddsMax: num(e.BASKETBALL_ODDS_MAX, 12),
+    baseballBase: (e.BASEBALL_BASE || 'https://v1.baseball.api-sports.io').replace(/\/+$/, ''),
+    hockeyBase: (e.HOCKEY_BASE || 'https://v1.hockey.api-sports.io').replace(/\/+$/, ''),
+    handballBase: (e.HANDBALL_BASE || 'https://v1.handball.api-sports.io').replace(/\/+$/, ''),
+    rugbyBase: (e.RUGBY_BASE || 'https://v1.rugby.api-sports.io').replace(/\/+$/, ''),
+    volleyballBase: (e.VOLLEYBALL_BASE || 'https://v1.volleyball.api-sports.io').replace(/\/+$/, ''),
+    americanFootballBase: (e.AMERICAN_FOOTBALL_BASE || 'https://v1.american-football.api-sports.io').replace(/\/+$/, ''),
+    apiSportsMinGapMs: num(e.API_SPORTS_MIN_GAP_MS, 1000),
+    apiSportsFixturesSec: num(e.API_SPORTS_FIXTURES_SEC, 900),
+    apiSportsLiveSec: num(e.API_SPORTS_LIVE_SEC, 60),
+    apiSportsOdds: bool(e.API_SPORTS_ODDS, true),
+    apiSportsOddsSec: num(e.API_SPORTS_ODDS_SEC, 600),
+    apiSportsOddsMax: num(e.API_SPORTS_ODDS_MAX, 6),
     apiFootballKey: e.API_FOOTBALL_KEY || '',
     apiFootballBase: e.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
     mockRealtime: bool(e.MOCK_REALTIME, false),

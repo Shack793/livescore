@@ -144,6 +144,7 @@ module.exports = function createApiBasketball(cfg, log) {
     name: 'apibasketball',
     isMock: false,
     sports: ['basketball'],
+    prefix: 'ab:',
     status() { return { mode: 'apibasketball', calls: st.calls, remaining: st.remaining, limit: st.limit, lastOk: st.lastOk ? new Date(st.lastOk).toISOString() : null, lastError: st.lastError, keySet: !!key }; },
     lowBudget,
 

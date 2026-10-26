@@ -27,7 +27,11 @@ function create({ db, provider, cfg, hub, log }) {
   /* ---------- feed cleanup ---------- */
   // sportmonks is legacy-only here: it is no longer an active provider, but its
   // old rows must be removed once after switching to API-Football.
-  const FEED_PREFIX = { apifootball: 'af:', apibasketball: 'ab:', sportmonks: 'sm:', mock: '' };
+  const FEED_PREFIX = {
+    apifootball: 'af:', apibasketball: 'ab:', apibaseball: 'bs:', apihockey: 'hk:',
+    apihandball: 'hb:', apirugby: 'rg:', apivolleyball: 'vb:', apiamericanfootball: 'nf:',
+    sportmonks: 'sm:', mock: ''
+  };
   const prefixOf = (feed) => FEED_PREFIX[feed] || '';
   // Drop rows that belong to a feed we no longer use (matches/teams/leagues and
   // their odds/details). This keeps old feed data from duplicating fixtures.
@@ -150,32 +154,74 @@ function create({ db, provider, cfg, hub, log }) {
     return changed;
   }
   const sports = () => (cfg.sports.length ? cfg.sports.filter((s) => provider.sports.includes(s)) : provider.sports);
+  // Only show sports that have a configured feed. Tennis has no API-Sports feed, so it
+  // disappears from the navigation instead of leaving an empty tab on the live site.
+  function syncSports() {
+    const active = sports();
+    if (!active.length) return;
+    const keep = new Set(active);
+    db.tx(() => {
+      db.all('SELECT id FROM sports').forEach((s) => db.run('UPDATE sports SET active=? WHERE id=?', keep.has(s.id) ? 1 : 0, s.id));
+    });
+    log('sports: showing ' + active.join(', '));
+  }
 
   async function fixtures() {
     const t = nowSec();
     const from = t - cfg.windowPastDays * DAY, to = t + cfg.windowFutureDays * DAY;
+    const listSports = sports();
     let n = 0;
-    for (const sport of sports()) {
-      const list = await provider.fixtures({ sport, from, to });
-      n += list.length;
-      const ch = upMatches(list);
-      if (ch.length && hub) hub.matchesChanged(ch);
+    const failed = [];
+    for (const sport of listSports) {
+      try {
+        const list = await provider.fixtures({ sport, from, to });
+        n += list.length;
+        const ch = upMatches(list);
+        if (ch.length && hub) hub.matchesChanged(ch);
+      } catch (e) {
+        failed.push(sport + ': ' + e.message);
+        log('fixtures ' + sport + ' failed: ' + e.message);
+      }
     }
-    log('fixtures: ' + n + ' matches pulled');
+    log('fixtures: ' + n + ' matches pulled' + (failed.length ? ' (' + failed.length + ' sport(s) failed)' : ''));
     status.counts.fixturesLastRun = n;
+    if (listSports.length && failed.length === listSports.length) throw new Error(failed.join('; '));
+  }
+
+  // A feed occasionally reports a future fixture as live (or leaves one behind after a
+  // bad response). Nothing can really be live more than an hour before kickoff, so put
+  // those rows back to scheduled instead of letting them stick on the live page.
+  function resetFutureLive() {
+    if (provider.isMock) return [];
+    const now = nowSec();
+    const rows = db.all("SELECT id FROM matches WHERE status IN ('live','halftime','break') AND kickoff > ?", now + 3600);
+    if (!rows.length) return [];
+    db.tx(() => rows.forEach((r) => db.run("UPDATE matches SET status='scheduled', minute=NULL, period=NULL, hs=NULL, as_=NULL, hths=NULL, htas=NULL, periods=NULL, updated_at=? WHERE id=?", now, r.id)));
+    log('live: reset ' + rows.length + ' future match(es) to scheduled');
+    return rows.map((r) => r.id);
   }
 
   // Live matches that vanished from the live feed must be resolved by fixtures; the live job just applies deltas.
   async function live() {
+    const listSports = sports();
     let all = [];
-    for (const sport of sports()) all = all.concat(await provider.live({ sport }));
-    const ch = upMatches(all);
+    const failed = [];
+    for (const sport of listSports) {
+      try {
+        all = all.concat(await provider.live({ sport }));
+      } catch (e) {
+        failed.push(sport + ': ' + e.message);
+        log('live ' + sport + ' failed: ' + e.message);
+      }
+    }
+    const ch = upMatches(all).concat(resetFutureLive());
     if (ch.length && hub) hub.matchesChanged(ch);
-    log('live: ' + all.length + ' live matches pulled');
+    log('live: ' + all.length + ' live matches pulled' + (failed.length ? ' (' + failed.length + ' sport(s) failed)' : ''));
     status.counts.live = all.length;
     // anything we think is live but the feed no longer lists: refresh via fixtures soon
     const stale = db.get("SELECT COUNT(*) n FROM matches WHERE status IN ('live','halftime','break') AND updated_at < ?", nowSec() - 120).n;
     if (stale && nowSec() - lastStaleFix > Math.max(300, cfg.intervals.fixturesSec)) { lastStaleFix = nowSec(); fixtures().catch((e) => log('fixtures (stale-live) failed: ' + e.message)); }
+    if (listSports.length && failed.length === listSports.length) throw new Error(failed.join('; '));
   }
 
   /* ---------- odds ---------- */
@@ -333,6 +379,7 @@ function create({ db, provider, cfg, hub, log }) {
   async function start() {
     purgeDemoIfSwitched();
     purgeOtherFeeds();
+    syncSports();
     warm();
     if (db.get('SELECT COUNT(*) n FROM leagues').n === 0 || (cfg.syncEnabled && !provider.isMock)) await runJob('reference');
     else if (provider.isMock) await runJob('reference');

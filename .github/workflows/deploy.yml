@@ -16,7 +16,7 @@
 #      chmod 440 /etc/sudoers.d/deploy-livescorenow && visudo -c
 #
 # Flow:
-#   1. CI: Node 22 + npm test (73 tests must pass)
+#   1. CI: Node 22 + npm test (81 tests must pass)
 #   2. Copy server/, shared/, public/, scripts/, deploy/, package.json, .env.example
 #      to /home/deploy/livescore-release/ via SCP
 #   3. SSH in: backup code, rsync release -> /opt/livescorenow (keeping .env, data/, backups/),

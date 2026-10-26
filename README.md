@@ -60,8 +60,17 @@ Day-to-day:
 
 Set in `.env`:
 ```
-DATA_PROVIDER=apifootball
-API_FOOTBALL_KEY=your-key
+DATA_PROVIDER=multi
+API_SPORTS_KEY=your-key
+FOOTBALL_PROVIDER=apifootball
+BASKETBALL_PROVIDER=apibasketball
+BASEBALL_PROVIDER=apibaseball
+HOCKEY_PROVIDER=apihockey
+HANDBALL_PROVIDER=apihandball
+RUGBY_PROVIDER=apirugby
+VOLLEYBALL_PROVIDER=apivolleyball
+AMERICAN_FOOTBALL_PROVIDER=apiamericanfootball
+SPORTS=football,basketball,baseball,hockey,handball,rugby,volleyball,american-football
 ```
 then `npm run provider:check` (read-only) and `systemctl restart livescorenow`. Switching from `mock` automatically deletes the simulated teams/matches **and the demo bookmakers** so nothing fake stays on a live site; bookmakers you added yourself are kept.
 
@@ -69,7 +78,7 @@ then `npm run provider:check` (read-only) and `systemctl restart livescorenow`. 
 
 * The API-Football adapter (`server/providers/apifootball.js`) has been verified against a live Pro key. `npm run provider:check` shows what each endpoint returns; all field mapping is in that one file.
 * **Live (in-play) odds per bookmaker** depend on your API plan and on what the provider returns; if live odds arrive without a bookmaker name, they cannot be matched to your affiliate partners. Pre-match odds per bookmaker are the safe path. Verify with `provider:check` and a plan that includes odds.
-* **Football and basketball have real adapters.** Football uses API-Football (`server/providers/apifootball.js`, with no fallback feed: if its daily quota runs out, the sync loop keeps retrying until it resets); basketball uses API-Basketball (`server/providers/apibasketball.js`, Pro plan: fixtures, live scores, standings, squads, H2H and winner odds). Tennis, hockey, etc. still run on demo data. For real data there, add a provider module (the contract is documented at the top of `server/providers/index.js`) — or set `SPORTS=football,basketball` in `.env` and the other tabs will simply be empty.
+* **All API-Sports team sports have real adapters.** Football uses API-Football (`server/providers/apifootball.js`); basketball uses API-Basketball (`server/providers/apibasketball.js`); baseball, hockey, handball, rugby, volleyball and American football use the shared API-Sports adapter (`server/providers/apisports.js`). Each sport is isolated: if one feed fails or hits its quota, the other feeds keep syncing. Tennis has no API-Sports feed, so it stays empty unless a provider is added.
 * **API quota.** Defaults poll live scores every 20s and live odds every 30s. Raise `LIVE_INTERVAL_SEC` etc. if your plan has a low daily limit; the admin dashboard shows each job's last run and errors.
 * Pull odds **from the same feed for all visitors** and let the region rules decide who sees which bookmaker. If a bookmaker gives you its own odds/affiliate feed, write a small provider that returns `{matchRef, bookmaker, market, selection, value}` rows (see the contract) — nothing else in the site needs to change.
 
@@ -117,21 +126,21 @@ Admin → *Ad slots*: leaderboard, two sidebar boxes, left skyscraper, in-feed (
 server/index.js            boots everything          server/app.js     routes, /go redirect, sitemap
 server/admin.js            admin API                 server/seed.js    first-run data
 server/services/sync.js    provider → SQLite jobs    server/services/hub.js   live push (SSE), per-country odds
-server/providers/          mock.js, apifootball.js   + the contract to add more feeds (index.js)
+server/providers/          mock.js, apifootball.js, apibasketball.js, apisports.js + the contract (index.js)
 server/geo/                countries/regions, DB-IP lookup, country resolution
 shared/                    code that runs on server AND browser: pages.js, views.js, bookmakers.js (region rules),
                            odds.js, util.js, mock-world.js (demo engine), store-memory.js (preview store)
 public/assets/             app.js (progressive enhancement), style.css       public/admin/   admin UI
 scripts/                   update-geoip.js, provider-check.js, build-preview.js
-deploy/                    setup.sh, update.sh, nginx.conf, livescorenow.service      tests/   69 tests
+deploy/                    setup.sh, update.sh, nginx.conf, livescorenow.service      tests/   81 tests
 ```
 Pages are rendered on the server (good for SEO and every page view is an ad impression); JavaScript only adds live updates, favourites, filters and settings, and the pages work without it.
 
 ## 8. Not included / known gaps
 
 * No news feed (by request), no user accounts, no background push notifications (alerts work while the site is open in a tab; true push when the site is closed can be added later without accounts, using Web Push), no player pages, no FIFA/ranking tables, no multi-language UI.
-* The real adapter supplies standings for football leagues only (cup groups/knockouts are not modelled).
-* Football (API-Football only) and basketball (API-Basketball) have real-data adapters; other sports are demo-only until you add feeds. Basketball v1 has no events/statistics/lineups endpoints, so those match-page tabs stay empty.
+* Standings are supplied where the feed returns them; cup groups/knockouts are not modelled.
+* Football (API-Football), basketball (API-Basketball), baseball, hockey, handball, rugby, volleyball and American football (shared API-Sports adapter) have real-data adapters. Tennis has no API-Sports feed. Basketball v1 has no events/statistics/lineups endpoints, so those match-page tabs stay empty.
 * Odds are indicative only and the site is not a bookmaker; show the bookmaker's own terms.
 
 ## Linking with Pitchside Forum

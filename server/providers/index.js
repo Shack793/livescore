@@ -12,26 +12,45 @@
 const createMock = require('./mock');
 const createApiFootball = require('./apifootball');
 const createApiBasketball = require('./apibasketball');
+const createApiSports = require('./apisports');
 
-const BUILDERS = { mock: createMock, apifootball: createApiFootball, apibasketball: createApiBasketball };
+const BUILDERS = {
+  mock: createMock,
+  apifootball: createApiFootball,
+  apibasketball: createApiBasketball,
+  apibaseball: (cfg, log) => createApiSports('baseball', cfg, log),
+  apihockey: (cfg, log) => createApiSports('hockey', cfg, log),
+  apihandball: (cfg, log) => createApiSports('handball', cfg, log),
+  apirugby: (cfg, log) => createApiSports('rugby', cfg, log),
+  apivolleyball: (cfg, log) => createApiSports('volleyball', cfg, log),
+  apiamericanfootball: (cfg, log) => createApiSports('american-football', cfg, log)
+};
 
 function createOne(name, cfg, log) {
   const b = BUILDERS[name];
-  if (!b) throw new Error('Unknown provider "' + name + '". Use "mock", "apifootball" or "apibasketball".');
+  if (!b) throw new Error('Unknown provider "' + name + '". Use mock or an API-Sports provider.');
   return b(cfg, log);
 }
 
 function createMulti(cfg, log) {
   const subs = [];
-  const football = createOne(cfg.footballProvider || 'apifootball', cfg, log);
-  subs.push(football);
-  if (cfg.basketballProvider) subs.push(createOne(cfg.basketballProvider, cfg, log));
+  const wanted = [
+    ['football', cfg.footballProvider || 'apifootball'],
+    ['basketball', cfg.basketballProvider],
+    ['baseball', cfg.baseballProvider],
+    ['hockey', cfg.hockeyProvider],
+    ['handball', cfg.handballProvider],
+    ['rugby', cfg.rugbyProvider],
+    ['volleyball', cfg.volleyballProvider],
+    ['american-football', cfg.americanFootballProvider]
+  ];
+  wanted.forEach(([sport, name]) => { if (name) subs.push(createOne(name, cfg, log)); });
   const bySport = {};
   subs.forEach((p) => (p.sports || []).forEach((s) => { bySport[s] = p; }));
-  // Ref prefixes per feed (apifootball af:, apibasketball ab:).
+  // Ref prefixes per feed (af:, ab:, bs:, hk:, hb:, rg:, vb:, nf:).
   // Routing prefers the explicit sport field; prefixes are only a fallback.
   const PREFIX = { apifootball: ['af:'], apibasketball: ['ab:'], mock: [] };
-  const prefixOf = (p) => Object.keys(PREFIX).filter((k) => p.name.indexOf(k) === 0).flatMap((k) => PREFIX[k]);
+  const prefixOf = (p) => (p.prefix ? [p.prefix] : Object.keys(PREFIX).filter((k) => p.name.indexOf(k) === 0).flatMap((k) => PREFIX[k]));
   const byPrefix = {};
   subs.forEach((p) => prefixOf(p).forEach((x) => { byPrefix[x] = p; }));
   const sportOf = (o) => {
@@ -49,7 +68,13 @@ function createMulti(cfg, log) {
     lowBudget() { return subs.some((p) => p.lowBudget && p.lowBudget()); },
     feedPrefixes() { return subs.flatMap((p) => prefixOf(p)); },
     async referenceData() {
-      const all = await Promise.all(subs.map((p) => p.referenceData()));
+      const results = await Promise.allSettled(subs.map((p) => p.referenceData()));
+      const all = [];
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') all.push(r.value);
+        else if (log) log('reference ' + subs[i].name + ' failed: ' + r.reason.message);
+      });
+      if (!all.length && results.length) throw new Error('all reference feeds failed');
       return {
         countries: uniq(all.flatMap((r) => r.countries || []), 'code'),
         leagues: uniq(all.flatMap((r) => r.leagues || []), 'ref'),
@@ -57,8 +82,13 @@ function createMulti(cfg, log) {
       };
     },
     async feedBookmakers() {
-      const all = await Promise.all(subs.map((p) => (p.feedBookmakers ? p.feedBookmakers().catch(() => []) : [])));
-      return uniq(all.flat(), 'ref');
+      const results = await Promise.allSettled(subs.map((p) => (p.feedBookmakers ? p.feedBookmakers() : [])));
+      const all = [];
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') all.push(...(r.value || []));
+        else if (log) log('bookmakers ' + subs[i].name + ' failed: ' + r.reason.message);
+      });
+      return uniq(all, 'ref');
     },
     async fixtures({ sport, from, to }) { return bySport[sport] ? bySport[sport].fixtures({ sport, from, to }) : []; },
     async live({ sport }) { return bySport[sport] ? bySport[sport].live({ sport }) : []; },
