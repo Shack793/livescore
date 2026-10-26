@@ -50,3 +50,16 @@ test('embed widgets: frameable, no betting/ads by default', async () => {
     assert.notStrictEqual(normal.headers.get('x-frame-options'), null);
   } finally { await s.close(); }
 });
+
+test('sport bar order: requested order, extra sports under More', async () => {
+  const s = await boot({});
+  try {
+    const r = await s.get('/');
+    const names = [...r.text.matchAll(/<a class="stab(?: xtra)?(?: on)?" href="\/([a-z-]*)\/?"/g)].map((m) => m[1] || 'football');
+    const want = ['football', 'basketball', 'tennis', 'volleyball', 'handball', 'american-football', 'baseball', 'hockey', 'rugby'];
+    // sports without a data feed (e.g. tennis) are hidden by the sync, so compare the relative order of what is shown
+    assert.deepStrictEqual(names, want.filter((x) => names.includes(x)));
+    assert.strictEqual(names[0], 'football');
+    assert.match(r.text, /class="morebox/);
+  } finally { await s.close(); }
+});

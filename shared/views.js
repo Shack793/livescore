@@ -172,7 +172,7 @@
   }
 
   /* ---------- chrome ---------- */
-  var MAIN_SPORTS = ['football', 'basketball', 'tennis', 'hockey', 'american-football', 'baseball'];
+  var MAIN_SPORTS = ['football', 'basketball', 'tennis', 'volleyball', 'handball', 'american-football', 'baseball'];
   function sportTabs(ctx) {
     function tab(s, cls) {
       var n = ctx.liveCounts[s.id] || 0;

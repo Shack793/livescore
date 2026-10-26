@@ -132,7 +132,7 @@ shared/                    code that runs on server AND browser: pages.js, views
                            odds.js, util.js, mock-world.js (demo engine), store-memory.js (preview store)
 public/assets/             app.js (progressive enhancement), style.css       public/admin/   admin UI
 scripts/                   update-geoip.js, provider-check.js, build-preview.js
-deploy/                    setup.sh, update.sh, nginx.conf, livescorenow.service      tests/   81 tests
+deploy/                    setup.sh, update.sh, nginx.conf, livescorenow.service      tests/   82 tests
 ```
 Pages are rendered on the server (good for SEO and every page view is an ad impression); JavaScript only adds live updates, favourites, filters and settings, and the pages work without it.
 

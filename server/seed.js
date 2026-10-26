@@ -7,7 +7,7 @@ const mockData = require('../shared/mock-data');
 function run(db, opts) {
   opts = opts || {};
   db.tx(() => {
-    mockData.SPORTS.forEach((s, i) => db.run('INSERT OR IGNORE INTO sports (id,name,icon,sort_order) VALUES (?,?,?,?)', s.id, s.name, s.icon, i));
+    mockData.SPORTS.forEach((s, i) => db.run('INSERT INTO sports (id,name,icon,sort_order) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET sort_order=excluded.sort_order', s.id, s.name, s.icon, i));
     countries.REGIONS.forEach((r) => db.run('INSERT OR IGNORE INTO regions (code,name,countries) VALUES (?,?,?)', r.code, r.name, r.countries.join(',')));
     seed.countryRules.forEach((c) => db.run('INSERT OR IGNORE INTO country_rules (country_code,betting_content,min_age,rg_text,rg_url,license_text) VALUES (?,?,?,?,?,?)', c.country_code, c.betting_content, c.min_age, c.rg_text, c.rg_url, c.license_text));
     seed.adSlots.forEach((a) => db.run('INSERT OR IGNORE INTO ad_slots (slot_key,label,placement,width,height,betting_related,sort_order) VALUES (?,?,?,?,?,?,?)', a.slot_key, a.label, a.placement, a.width, a.height, a.betting_related, a.sort_order));

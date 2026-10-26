@@ -338,7 +338,7 @@ table{border-collapse:collapse;width:100%}
 .morepanel a{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:7px;color:var(--ink);font-weight:600}
 .morepanel a i{font-style:normal}.morepanel a:hover{background:var(--bg);text-decoration:none}.morepanel a.on{color:var(--accent)}
 .stab.xtra{display:none}
-@media (max-width:1020px){
+@media (max-width:1200px){
   .stabs-in{overflow-x:auto}
   .forum-btn{order:-1;margin-left:0;margin-right:4px;padding:6px 12px}
   .stab.xtra{display:flex}.morebox{display:none}
@@ -355,3 +355,10 @@ table{border-collapse:collapse;width:100%}
 .cont .tree summary::after{content:"";margin:0}
 .cont .tree details[open] summary::after{content:""}
 .cont .tree summary{padding:7px 12px 7px 16px}
+
+/* iOS Safari: never let the page pan sideways. overflow-x:clip on body clips without creating a scroll container (keeps the sticky header). */
+html{overflow-x:hidden;max-width:100%}
+body{overflow-x:hidden;overflow-x:clip;max-width:100%;position:relative}
+.wrap,.layout,.main,.stabs,.top{max-width:100%}
+.main,.col-right{overflow-x:clip}
+.stabs-in,.dn-days,.filters,.subtabs,.tblwrap{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}

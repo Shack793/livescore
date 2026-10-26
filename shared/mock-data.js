@@ -12,11 +12,11 @@
     { id: 'football', name: 'Football', icon: '⚽' },
     { id: 'basketball', name: 'Basketball', icon: '🏀' },
     { id: 'tennis', name: 'Tennis', icon: '🎾' },
-    { id: 'hockey', name: 'Ice Hockey', icon: '🏒' },
     { id: 'volleyball', name: 'Volleyball', icon: '🏐' },
+    { id: 'handball', name: 'Handball', icon: '🤾' },
     { id: 'american-football', name: 'American Football', icon: '🏈' },
     { id: 'baseball', name: 'Baseball', icon: '⚾' },
-    { id: 'handball', name: 'Handball', icon: '🤾' },
+    { id: 'hockey', name: 'Ice Hockey', icon: '🏒' },
     { id: 'rugby', name: 'Rugby', icon: '🏉' }
   ];
 
