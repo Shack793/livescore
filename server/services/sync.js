@@ -188,17 +188,28 @@ function create({ db, provider, cfg, hub, log }) {
     if (listSports.length && failed.length === listSports.length) throw new Error(failed.join('; '));
   }
 
-  // A feed occasionally reports a future fixture as live (or leaves one behind after a
-  // bad response). Nothing can really be live more than an hour before kickoff, so put
-  // those rows back to scheduled instead of letting them stick on the live page.
-  function resetFutureLive() {
+  // A feed can leave a match marked live after it has finished (or report a future
+  // fixture as live). Once a match is no longer in the live feed, future kickoffs go
+  // back to scheduled and anything older than 12 hours is closed. This catches rows
+  // that fall outside the fixtures window before cleanup removes them.
+  function reconcileStaleLive(liveList) {
     if (provider.isMock) return [];
     const now = nowSec();
-    const rows = db.all("SELECT id FROM matches WHERE status IN ('live','halftime','break') AND kickoff > ?", now + 3600);
-    if (!rows.length) return [];
-    db.tx(() => rows.forEach((r) => db.run("UPDATE matches SET status='scheduled', minute=NULL, period=NULL, hs=NULL, as_=NULL, hths=NULL, htas=NULL, periods=NULL, updated_at=? WHERE id=?", now, r.id)));
-    log('live: reset ' + rows.length + ' future match(es) to scheduled');
-    return rows.map((r) => r.id);
+    const seen = new Set((liveList || []).map((m) => m.ref));
+    const rows = db.all("SELECT id,ref,kickoff FROM matches WHERE status IN ('live','halftime','break')");
+    const ids = [];
+    db.tx(() => rows.forEach((r) => {
+      if (seen.has(r.ref)) return;
+      if (r.kickoff > now + 3600) {
+        db.run("UPDATE matches SET status='scheduled', minute=NULL, period=NULL, hs=NULL, as_=NULL, hths=NULL, htas=NULL, periods=NULL, updated_at=? WHERE id=?", now, r.id);
+        ids.push(r.id);
+      } else if (r.kickoff < now - 12 * 3600) {
+        db.run("UPDATE matches SET status='finished', minute=NULL, period=NULL, updated_at=? WHERE id=?", now, r.id);
+        ids.push(r.id);
+      }
+    }));
+    if (ids.length) log('live: resolved ' + ids.length + ' stale match(es)');
+    return ids;
   }
 
   // Live matches that vanished from the live feed must be resolved by fixtures; the live job just applies deltas.
@@ -214,7 +225,7 @@ function create({ db, provider, cfg, hub, log }) {
         log('live ' + sport + ' failed: ' + e.message);
       }
     }
-    const ch = upMatches(all).concat(resetFutureLive());
+    const ch = upMatches(all).concat(reconcileStaleLive(all));
     if (ch.length && hub) hub.matchesChanged(ch);
     log('live: ' + all.length + ' live matches pulled' + (failed.length ? ' (' + failed.length + ' sport(s) failed)' : ''));
     status.counts.live = all.length;
