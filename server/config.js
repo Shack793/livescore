@@ -92,6 +92,7 @@ function load(root, overrides) {
     // Sister community site (Pitchside Forum). Empty = no forum links are shown.
     forumUrl: (e.FORUM_URL || '').replace(/\/+$/, ''),
     forumName: e.FORUM_NAME || 'Pitchside Forum',
+    showCountryPicker: bool(e.SHOW_COUNTRY_PICKER, false),   // false = visitors never see a country list; their country is detected automatically
     forumMatchUrl: e.FORUM_MATCH_URL || '',   // optional template, e.g. https://forum.com/search?q={query}  ({home} {away} {league} {query})
     // Origins allowed to put /embed/* widgets in an iframe (space/comma separated). Defaults to the forum's origin.
     embedOrigins: String(e.EMBED_ORIGINS || '').split(/[\s,]+/).filter(Boolean),

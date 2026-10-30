@@ -9,7 +9,7 @@
   var store = LSN.storeMemory.create({ countryName: nameOf, regions: DATA.regions });
   var deviceTz = 'UTC'; try { deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { /* ignore */ }
   var root = document.getElementById('root');
-  var cfg = { siteName: 'LiveScoreNow', siteUrl: location.origin && location.origin !== 'null' ? location.origin : 'https://livescorenow.example', siteTz: deviceTz, assetV: 'p', contactEmail: 'hello@livescorenow.example', forumUrl: 'https://www.pitchsideforum.com', forumName: 'Pitchside Forum' };
+  var cfg = { siteName: 'LiveScoreNow', siteUrl: location.origin && location.origin !== 'null' ? location.origin : 'https://livescorenow.example', siteTz: deviceTz, assetV: 'p', contactEmail: 'hello@livescorenow.example', forumUrl: 'https://www.pitchsideforum.com', forumName: 'Pitchside Forum', showCountryPicker: false };
 
   function guessCc() {
     try { var saved = localStorage.getItem('lsn_pv_cc'); if (saved) return saved; } catch (e) { /* ignore */ }

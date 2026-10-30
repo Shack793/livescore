@@ -201,14 +201,14 @@
       '<div class="top-actions">' +
         '<button class="icon-btn search-btn" id="searchBtn" aria-label="Search">🔍</button>' +
         '<a class="icon-btn" href="/favorites/" title="My teams">★<span class="lbl">My teams</span></a>' +
-        '<button class="icon-btn cc-btn" id="ccBtn" title="Your region: ' + E(ctx.countryName) + '. Bookmakers shown depend on this.">' + flag(ctx.cc) + '<span>' + E(ctx.cc === 'ZZ' ? 'Region' : ctx.cc) + '</span></button>' +
+        (ctx.showCountryPicker ? '<button class="icon-btn cc-btn" id="ccBtn" title="Your region: ' + E(ctx.countryName) + '. Bookmakers shown depend on this.">' + flag(ctx.cc) + '<span>' + E(ctx.cc === 'ZZ' ? 'Region' : ctx.cc) + '</span></button>' : '') +
         '<button class="icon-btn" id="setBtn" aria-label="Settings">⚙</button>' +
       '</div></div>' +
       '<div class="pop" id="setPop" hidden><h4>Settings</h4>' +
         '<label>Odds format<select id="setOdds"><option value="decimal">Decimal (1.85)</option><option value="fractional">Fractional (17/20)</option><option value="american">American (-118)</option></select></label>' +
         '<label>Theme<select id="setTheme"><option value="auto">Match device</option><option value="light">Light</option><option value="dark">Dark</option></select></label>' +
         '<label>Time zone<select id="setTz"></select></label><label class="chk"><input type="checkbox" id="setAlerts"> Alerts for my teams (goals, kick-off, full-time)</label></div>' +
-      '<div class="pop" id="ccPop" hidden><h4>Choose your country</h4><p class="muted">Bookmakers and offers are shown according to the country you pick or we detect.</p><input id="ccFilter" type="search" placeholder="Search country…" aria-label="Search country"><ul id="ccList"></ul></div>' +
+      (ctx.showCountryPicker ? '<div class="pop" id="ccPop" hidden><h4>Choose your country</h4><p class="muted">Bookmakers and offers are shown according to the country you pick or we detect.</p><input id="ccFilter" type="search" placeholder="Search country…" aria-label="Search country"><ul id="ccList"></ul></div>' : '') +
       '</header>';
   }
 

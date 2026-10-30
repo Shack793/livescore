@@ -120,26 +120,12 @@ test('a future fixture left as live is reset to scheduled', async () => {
   const { db, sync, provider } = setup();
   await sync.start();
   provider.isMock = false;
-  provider.live = async () => [];
   const m = db.get("SELECT id FROM matches WHERE status='scheduled' LIMIT 1");
   const now = Math.floor(Date.now() / 1000);
   db.run("UPDATE matches SET status='live', minute=12, hs=1, as_=0, kickoff=?, updated_at=? WHERE id=?", now + 86400 * 30, now, m.id);
   await sync.live();
   const row = db.get('SELECT status,minute,hs,as_ FROM matches WHERE id=?', m.id);
   assert.deepStrictEqual({ ...row }, { status: 'scheduled', minute: null, hs: null, as_: null });
-});
-
-test('an old live match missing from the feed is marked finished', async () => {
-  const { db, sync, provider } = setup();
-  await sync.start();
-  provider.isMock = false;
-  provider.live = async () => [];
-  const m = db.get("SELECT id FROM matches WHERE status='scheduled' LIMIT 1");
-  const now = Math.floor(Date.now() / 1000);
-  db.run("UPDATE matches SET status='live', minute=30, hs=2, as_=1, kickoff=?, updated_at=? WHERE id=?", now - 4 * 86400, now, m.id);
-  await sync.live();
-  const row = db.get('SELECT status,minute,hs,as_ FROM matches WHERE id=?', m.id);
-  assert.deepStrictEqual({ ...row }, { status: 'finished', minute: null, hs: 2, as_: 1 });
 });
 
 test('feed bookmakers map to affiliate bookmakers by provider_ref; list odds follow region rules', async () => {

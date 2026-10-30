@@ -63,3 +63,13 @@ test('sport bar order: requested order, extra sports under More', async () => {
     assert.match(r.text, /class="morebox/);
   } finally { await s.close(); }
 });
+
+test('country is automatic: no country picker unless SHOW_COUNTRY_PICKER=true', async () => {
+  const a = await boot({}), b = await boot({ SHOW_COUNTRY_PICKER: 'true' });
+  try {
+    const x = await a.get('/?cc=GH'), y = await b.get('/?cc=GH');
+    assert.doesNotMatch(x.text, /id="ccBtn"|id="ccPop"|Choose your country/);
+    assert.match(y.text, /id="ccBtn"/);
+    assert.match(x.text, /BetWave/); // still geo-targeted without a picker
+  } finally { await a.close(); await b.close(); }
+});

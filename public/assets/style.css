@@ -355,6 +355,7 @@ table{border-collapse:collapse;width:100%}
 .cont .tree summary::after{content:"";margin:0}
 .cont .tree details[open] summary::after{content:""}
 .cont .tree summary{padding:7px 12px 7px 16px}
+.cont .tree summary{padding:7px 12px 7px 16px}
 
 /* iOS Safari: never let the page pan sideways. overflow-x:clip on body clips without creating a scroll container (keeps the sticky header). */
 html{overflow-x:hidden;max-width:100%}

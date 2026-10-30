@@ -23,7 +23,7 @@
     var sports = store.sports();
     sports.forEach(function (s) { SPORT_NAMES[s.id] = s.name; });
     var ctx = {
-      siteName: cfg.siteName, siteUrl: cfg.siteUrl, siteTz: cfg.siteTz, assetV: cfg.assetV || '1', contactEmail: cfg.contactEmail || '', forumUrl: cfg.forumUrl || '', forumName: cfg.forumName || 'Pitchside Forum', forumMatchUrl: cfg.forumMatchUrl || '',
+      siteName: cfg.siteName, siteUrl: cfg.siteUrl, siteTz: cfg.siteTz, assetV: cfg.assetV || '1', contactEmail: cfg.contactEmail || '', forumUrl: cfg.forumUrl || '', forumName: cfg.forumName || 'Pitchside Forum', forumMatchUrl: cfg.forumMatchUrl || '', showCountryPicker: !!cfg.showCountryPicker,
       tagline: store.setting('site_tagline', 'Live scores, fixtures & odds'),
       path: inp.path, ccSource: inp.ccSource || '', now: inp.now, tz: tz, cc: inp.cc || 'ZZ', countryName: inp.countryName || 'your region',
       oddsFmt: ODDS_FMT[ck.lsn_odds] ? ck.lsn_odds : (store.setting('odds_format', 'decimal')),

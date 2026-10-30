@@ -16,7 +16,7 @@ const BOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|monitor|headless
 function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
   const pub = path.join(cfg.root, 'public');
   const assetV = (() => { try { return ['app.js', 'style.css'].map((f) => Math.floor(fs.statSync(path.join(pub, 'assets', f)).mtimeMs / 1000).toString(36)).join(''); } catch (e) { return '1'; } })();
-  const pageCfg = { siteName: cfg.siteName, siteUrl: cfg.siteUrl, siteTz: cfg.siteTz, assetV, contactEmail: cfg.contactEmail, forumUrl: cfg.forumUrl, forumName: cfg.forumName, forumMatchUrl: cfg.forumMatchUrl };
+  const pageCfg = { siteName: cfg.siteName, siteUrl: cfg.siteUrl, siteTz: cfg.siteTz, assetV, contactEmail: cfg.contactEmail, forumUrl: cfg.forumUrl, forumName: cfg.forumName, forumMatchUrl: cfg.forumMatchUrl, showCountryPicker: cfg.showCountryPicker };
   const bkCache = http.makeCache(400);
   const goLimit = http.makeLimiter(90, 60000);
   const apiLimit = http.makeLimiter(cfg.apiRatePerMin, 60000);
