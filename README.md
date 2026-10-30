@@ -157,3 +157,10 @@ Set `FORUM_URL` (and optionally `FORUM_NAME`, `FORUM_MATCH_URL`) in `.env`. Live
 Embed params: `/embed/live/` or `/embed/<sport>/`; `limit` (1-60, default 15), `theme` (light|dark), `odds=1` to show bookmaker odds (off by default; embeds carry no ads). Add other embedding sites via `EMBED_ORIGINS`.
 
 Clicking any match row opens the match page in a new tab.
+
+## Ads and bookmakers by country (automatic)
+
+Visitors never choose a country: it is detected from their connection. In the admin panel:
+- **Bookmakers & regions:** which bookmakers show where (a country, a region group, or Everywhere).
+- **Ads by country:** for each ad slot, add a different banner or ad code per country, per region group, or "Everywhere else". The visitor's own country wins, then their region group, then the default. A rule can also say "show no ad there". Mark betting/casino ads so they never appear where betting is off.
+- **Country compliance:** switch all betting content off for a country.

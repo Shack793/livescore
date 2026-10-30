@@ -41,6 +41,7 @@ function create(db) {
       };
       return bkCache;
     },
+    adCreatives() { return db.all('SELECT * FROM ad_creatives WHERE active=1 ORDER BY priority DESC, id'); },
     adSlots() { return db.all('SELECT * FROM ad_slots WHERE active=1 ORDER BY sort_order'); },
 
     matches(o) {

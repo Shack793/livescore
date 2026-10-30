@@ -11,13 +11,17 @@
   var root = document.getElementById('root');
   var cfg = { siteName: 'LiveScoreNow', siteUrl: location.origin && location.origin !== 'null' ? location.origin : 'https://livescorenow.example', siteTz: deviceTz, assetV: 'p', contactEmail: 'hello@livescorenow.example', forumUrl: 'https://www.pitchsideforum.com', forumName: 'Pitchside Forum', showCountryPicker: false };
 
-  function guessCc() {
-    try { var saved = localStorage.getItem('lsn_pv_cc'); if (saved) return saved; } catch (e) { /* ignore */ }
-    var m = String(navigator.language || '').match(/-([A-Z]{2})$/);
-    return m && DATA.iso.indexOf(m[1]) !== -1 ? m[1] : 'GH';
+  // Country is detected automatically (like the real site does on the server). The preview is a static page, so it asks a
+  // free IP-country service from the browser; ?cc=NG on the page address overrides it for testing. No visible country picker.
+  var cc = 'GH', detected = false;
+  function fromLang() { var m = String(navigator.language || '').match(/-([A-Z]{2})$/); return m && DATA.iso.indexOf(m[1]) !== -1 ? m[1] : 'GH'; }
+  function detectCc(done) {
+    var q = new URLSearchParams(location.search).get('cc');
+    if (q && DATA.iso.indexOf(q.toUpperCase()) !== -1) { cc = q.toUpperCase(); return done(); }
+    var finished = false; function fin(c) { if (finished) return; finished = true; cc = c && DATA.iso.indexOf(c) !== -1 ? c : fromLang(); done(); }
+    var t = setTimeout(function () { fin(''); }, 2500);
+    try { fetch('https://api.country.is/').then(function (r) { return r.json(); }).then(function (j) { clearTimeout(t); fin(String(j.country || '').toUpperCase()); }).catch(function () { clearTimeout(t); fin(''); }); } catch (e) { clearTimeout(t); fin(''); }
   }
-  var cc = guessCc();
-  function setCc(c) { cc = c; try { localStorage.setItem('lsn_pv_cc', c); } catch (e) { /* ignore */ } render(); }
 
   function cookies() {
     var o = {}; ['lsn_tz', 'lsn_odds', 'lsn_theme', 'lsn_consent'].forEach(function (k) { var v = LSN.app.getCookie(k); if (v) o[k] = v; });
@@ -30,10 +34,6 @@
   }
   function routeOf() { var h = location.hash || ''; return h.indexOf('#/') === 0 ? h.slice(1) : '/'; }
 
-  function regionPanel() {
-    var picks = ['GH', 'NG', 'ZA', 'GB', 'DE', 'US', 'BR'];
-    return '<div id="pvRegion"><b>Preview · viewing as</b>' + picks.map(function (c) { return '<button data-pv="' + c + '"' + (c === cc ? ' class="on"' : '') + '>' + c + '</button>'; }).join('') + '<small>Bookmakers, odds and ads change with the visitor’s country</small></div>';
-  }
   function render() {
     var out = run(routeOf());
     if (out.redirect) { location.hash = '#' + out.redirect; return; }
@@ -42,7 +42,7 @@
     document.documentElement.className = 'js';
     document.title = out.page.title ? out.page.title + ' | LiveScoreNow' : 'LiveScoreNow';
     window.LSN_CFG = V.pageConfig(out.ctx, out.page);
-    root.innerHTML = V.shell(out.ctx, out.page) + regionPanel();
+    root.innerHTML = V.shell(out.ctx, out.page);
     window.scrollTo(0, 0);
     LSN.app.init();
   }
@@ -60,7 +60,7 @@
     openNew: function (u) { var w = window.open(location.href.split('#')[0] + '#' + u, '_blank'); if (!w) location.hash = '#' + u; },
     query: function () { var h = location.hash || ''; var i = h.indexOf('?'); return new URLSearchParams(i === -1 ? '' : h.slice(i)); },
     shareUrl: function (ids) { return location.href.split('#')[0] + '#/favorites/?teams=' + ids; },
-    setRegion: setCc,
+    setRegion: function () {},
     stream: function (on) {
       var n = 0;
       var t = setInterval(function () {
@@ -90,7 +90,6 @@
     document.body.appendChild(m);
   }
   document.addEventListener('click', function (e) {
-    var b = e.target.closest('#pvRegion button'); if (b) { setCc(b.getAttribute('data-pv')); return; }
     if (e.target.closest('#pvClose') || e.target.id === 'pvModal') { var m = document.getElementById('pvModal'); if (m) m.remove(); return; }
     var a = e.target.closest('a[href]'); if (!a) return;
     var href = a.getAttribute('href');
@@ -109,5 +108,5 @@
     var f = e.target; if (f.getAttribute('action') === '/search/') { e.preventDefault(); location.hash = '#/search/?q=' + encodeURIComponent(f.querySelector('input[name=q]').value); }
   });
   window.addEventListener('hashchange', render);
-  render();
+  detectCc(function () { render(); });
 })();

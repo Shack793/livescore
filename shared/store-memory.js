@@ -91,6 +91,7 @@
       setting: function (k, d) { return k === 'odds_format' ? 'decimal' : k === 'site_tagline' ? 'Live scores, fixtures & odds' : d; },
       isMock: function () { return true; },
       bookmakerConfig: function () { return { bookmakers: dep.S.bookmakers.map(function (b) { return Object.assign({ active: 1 }, b); }), rules: dep.S.rules.map(function (r) { return Object.assign({ affiliate_url: null, offer: null, license_text: null, sort_order: null }, r); }), regions: opts.regions || [], countryRules: dep.S.countryRules }; },
+      adCreatives: function () { return (dep.S.adCreatives || []).map(function (a, i) { return Object.assign({ id: i + 1, mode: 'show', ad_code: '', fallback_code: '', image_url: '', link_url: '', alt_text: '', betting_related: 0, priority: 0, active: 1 }, a); }); },
       adSlots: function () { return dep.S.adSlots.map(function (a) { return Object.assign({ ad_code: '', fallback_code: '', countries_include: '', countries_exclude: '', active: 1 }, a); }); },
       matches: function (o) {
         var out = matchList.filter(function (m) {

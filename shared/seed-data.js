@@ -54,5 +54,15 @@
     { slot_key: 'mobile-sticky', label: 'Mobile sticky footer', placement: 'mobile', width: 320, height: 50, betting_related: 0, sort_order: 7 }
   ];
 
-  return { bookmakers: bookmakers, rules: rules, countryRules: countryRules, adSlots: adSlots };
+  // Demo regional ads (only used by the preview / demo installs). Real sites add theirs in Admin → Ads by country.
+  function promo(t, s, c) { return '<div style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;height:100%;min-height:90px;padding:12px;border-radius:10px;text-align:center;background:' + c + ';color:#fff;font:600 14px system-ui"><b style="font-size:16px">' + t + '</b><span style="font-weight:500;opacity:.9">' + s + '</span></div>'; }
+  var adCreatives = [
+    { slot_key: 'sidebar-1', name: 'Ghana mobile data promo', scope_type: 'country', scope_value: 'GH', ad_code: promo('Ghana banner', 'Shown to visitors in Ghana only', '#0b6b3a') },
+    { slot_key: 'sidebar-1', name: 'West Africa promo', scope_type: 'region', scope_value: 'WEST_AFRICA', ad_code: promo('West Africa banner', 'Shown across West Africa', '#7a4a00') },
+    { slot_key: 'sidebar-1', name: 'Europe promo', scope_type: 'region', scope_value: 'EUROPE', ad_code: promo('Europe banner', 'Shown to visitors in Europe', '#1b3a6b') },
+    { slot_key: 'sidebar-1', name: 'Worldwide fallback', scope_type: 'all', scope_value: '*', ad_code: promo('Global banner', 'Shown everywhere else', '#444') },
+    { slot_key: 'leaderboard', name: 'No leaderboard in the US', scope_type: 'country', scope_value: 'US', mode: 'hide' }
+  ];
+
+  return { bookmakers: bookmakers, rules: rules, countryRules: countryRules, adSlots: adSlots, adCreatives: adCreatives };
 });

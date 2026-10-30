@@ -113,6 +113,27 @@ function create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches }) {
       }
       if (m === 'DELETE' && b) { db.run('DELETE FROM ad_slots WHERE slot_key=?', str(b, 40)); clearCaches(); return ok(); }
     }
+    if (a === 'ad-creatives') {
+      if (m === 'GET') return ok(db.all('SELECT * FROM ad_creatives ORDER BY slot_key, priority DESC, id'));
+      if (m === 'PUT') {
+        const slot = str(body.slot_key, 40).toLowerCase();
+        if (!db.get('SELECT 1 x FROM ad_slots WHERE slot_key=?', slot)) throw err(400, 'Unknown ad slot');
+        const t = str(body.scope_type, 10);
+        if (!['country', 'region', 'all'].includes(t)) throw err(400, 'Choose Country, Region or Everywhere');
+        const v = t === 'all' ? '*' : str(body.scope_value, 40).toUpperCase();
+        if (t === 'country' && !countries.isValid(v)) throw err(400, 'Unknown country code ' + v);
+        if (t === 'region' && !regionCodes().has(v)) throw err(400, 'Unknown region ' + v);
+        const mode = body.mode === 'hide' ? 'hide' : 'show';
+        const code = String(body.ad_code == null ? '' : body.ad_code).slice(0, 20000), img = url(body.image_url), link = url(body.link_url);
+        if (mode === 'show' && !code.trim() && !img) throw err(400, 'Paste the ad code, or give a banner image address');
+        const rec = [slot, str(body.name, 80), t, v, mode, code, String(body.fallback_code == null ? '' : body.fallback_code).slice(0, 20000), img, link, str(body.alt_text, 120), flag(body.betting_related), int(body.priority, 0), body.active === undefined ? 1 : flag(body.active)];
+        const id = int(b, 0);
+        if (id) db.run("UPDATE ad_creatives SET slot_key=?,name=?,scope_type=?,scope_value=?,mode=?,ad_code=?,fallback_code=?,image_url=?,link_url=?,alt_text=?,betting_related=?,priority=?,active=?,updated_at=datetime('now') WHERE id=?", ...rec, id);
+        else db.run('INSERT INTO ad_creatives (slot_key,name,scope_type,scope_value,mode,ad_code,fallback_code,image_url,link_url,alt_text,betting_related,priority,active) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', ...rec);
+        clearCaches(); return ok();
+      }
+      if (m === 'DELETE' && b) { db.run('DELETE FROM ad_creatives WHERE id=?', int(b, 0)); clearCaches(); return ok(); }
+    }
     if (a === 'leagues') {
       if (m === 'GET') {
         const q = '%' + str(u.searchParams.get('q'), 60).replace(/[%_]/g, ' ') + '%';

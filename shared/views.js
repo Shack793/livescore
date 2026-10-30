@@ -156,9 +156,44 @@
       '<small>Ad · ' + ctx.bk.compliance.min_age + '+ · T&amp;Cs apply</small></div>';
   }
 
+  // Regional ads: every slot can have several creatives, each for a country, a region or everywhere.
+  // The most specific match wins (country > region > everywhere); on a tie the higher priority wins.
+  // A creative with mode "hide" means: show no ad in that slot for that audience.
+  function safeUrl(u) { u = String(u || '').trim(); return /^https?:\/\//i.test(u) ? u : ''; }
+  function creativeFor(ctx, key) {
+    var best = null, bestScore = -1;
+    (ctx.adCreatives || []).forEach(function (c) {
+      if (c.slot_key !== key || !Number(c.active == null ? 1 : c.active)) return;
+      var sp = c.scope_type === 'country' ? (String(c.scope_value).toUpperCase() === ctx.cc ? 3 : 0)
+        : c.scope_type === 'region' ? ((ctx.regionCodes || []).indexOf(c.scope_value) !== -1 ? 2 : 0)
+        : c.scope_type === 'all' ? 1 : 0;
+      if (!sp) return;
+      if (Number(c.betting_related) && !ctx.bk.compliance.betting_allowed) return;   // betting creative is skipped where betting is off
+      var score = sp * 1000 + Number(c.priority || 0);
+      if (score > bestScore) { best = c; bestScore = score; }
+    });
+    return best;
+  }
+  function creativeHtml(c) {
+    if (c.ad_code) return { code: c.ad_code, fallback: c.fallback_code || '' };
+    var img = safeUrl(c.image_url), link = safeUrl(c.link_url);
+    if (!img) return null;
+    var tag = '<img src="' + E(img) + '" alt="' + E(c.alt_text || c.name || 'Advertisement') + '" loading="lazy" style="display:block;max-width:100%;height:auto;margin:0 auto">';
+    return { code: '', fallback: '', plain: link ? '<a href="' + E(link) + '" target="_blank" rel="sponsored noopener">' + tag + '</a>' : tag };
+  }
+
   function adSlot(ctx, key, matchId) {
     var s = slotOf(ctx, key);
     if (!s || !slotAllowed(ctx, s)) return '';
+    var cr = creativeFor(ctx, key);
+    if (cr) {
+      if (cr.mode === 'hide') return '';
+      var h = creativeHtml(cr);
+      if (h) {
+        s = Object.assign({}, s, { ad_code: h.code, fallback_code: h.plain || h.fallback });
+        if (h.plain) { return '<div class="ad ad-' + E(s.placement) + '" data-slot="' + E(s.slot_key) + '" data-creative="' + (Number(cr.id) || 0) + '" style="' + (s.width ? 'max-width:' + s.width + 'px' : '') + '"><span class="ad-lab">Advertisement</span>' + h.plain + '</div>'; }
+      }
+    }
     var size = '', inner = '';
     if (s.ad_code) size = s.width && s.height ? 'min-height:' + s.height + 'px;max-width:' + s.width + 'px' : '';
     if (s.ad_code) inner = '<template class="ad-code">' + s.ad_code + '</template>' + (s.fallback_code ? '<template class="ad-fallback">' + s.fallback_code + '</template>' : '');
@@ -338,6 +373,6 @@
   return {
     LIVE: LIVE, teamUrl: teamUrl, matchUrl: matchUrl, leagueUrl: leagueUrl, sportUrl: sportUrl, statusOf: statusOf, stKey: stKey, hasScore: hasScore,
     flag: flag, crest: crest, bkChip: bkChip, cta: cta, goUrl: goUrl, oddCell: oddCell, matchRow: matchRow, perHtml: perHtml, matchList: matchList, adSlot: adSlot,
-    offersBox: offersBox, forumMatchLink: forumMatchLink, shell: shell, document: document_, pageConfig: pageConfig, slotAllowed: slotAllowed, houseBanner: houseBanner
+    offersBox: offersBox, forumMatchLink: forumMatchLink, shell: shell, document: document_, pageConfig: pageConfig, slotAllowed: slotAllowed, creativeFor: creativeFor, houseBanner: houseBanner
   };
 });

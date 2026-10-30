@@ -18,6 +18,9 @@ function run(db, opts) {
       seed.rules.forEach((r) => db.run('INSERT INTO bookmaker_geo (bookmaker_id,scope_type,scope_value,mode,affiliate_url,offer,license_text,sort_order) VALUES (?,?,?,?,?,?,?,?)',
         r.bookmaker_id, r.scope_type, r.scope_value, r.mode, r.affiliate_url || null, r.offer || null, r.license_text || null, r.sort_order == null ? null : r.sort_order));
     }
+    if (!db.get('SELECT COUNT(*) n FROM ad_creatives').n && opts.demoBookmakers !== false && (seed.adCreatives || []).length) {
+      seed.adCreatives.forEach((a) => db.run('INSERT INTO ad_creatives (slot_key,name,scope_type,scope_value,mode,ad_code) VALUES (?,?,?,?,?,?)', a.slot_key, a.name, a.scope_type, a.scope_value, a.mode || 'show', a.ad_code || ''));
+    }
     [['odds_format', 'decimal'], ['site_tagline', 'Live scores, fixtures & odds'], ['footer_note', '']].forEach((kv) => db.run('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)', kv[0], kv[1]));
   });
 }

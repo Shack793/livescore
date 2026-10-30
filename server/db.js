@@ -77,6 +77,13 @@ CREATE TABLE IF NOT EXISTS ad_slots (
   countries_include TEXT NOT NULL DEFAULT '', countries_exclude TEXT NOT NULL DEFAULT '',
   active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS ad_creatives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, slot_key TEXT NOT NULL, name TEXT NOT NULL DEFAULT '',
+  scope_type TEXT NOT NULL DEFAULT 'country', scope_value TEXT NOT NULL DEFAULT '*', mode TEXT NOT NULL DEFAULT 'show',
+  ad_code TEXT NOT NULL DEFAULT '', fallback_code TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '', link_url TEXT NOT NULL DEFAULT '', alt_text TEXT NOT NULL DEFAULT '',
+  betting_related INTEGER NOT NULL DEFAULT 0, priority INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ad_creatives_slot ON ad_creatives (slot_key);
 CREATE TABLE IF NOT EXISTS clicks (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, bookmaker_id INTEGER NOT NULL, country TEXT NOT NULL DEFAULT '',
   match_id INTEGER, placement TEXT NOT NULL DEFAULT ''

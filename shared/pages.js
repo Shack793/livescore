@@ -30,7 +30,8 @@
       theme: ck.lsn_theme === 'dark' || ck.lsn_theme === 'light' ? ck.lsn_theme : 'auto',
       bk: bk, bettingOn: bk.compliance.betting_allowed && bk.items.length > 0,
       needConsent: !!inp.needConsent, consent: ck.lsn_consent === 'yes' || ck.lsn_consent === 'no' ? ck.lsn_consent : '',
-      isMock: !!store.isMock(), adSlots: store.adSlots(), sports: sports, sport: 'football', streamOn: inp.streamOn !== false,
+      isMock: !!store.isMock(), adSlots: store.adSlots(), adCreatives: store.adCreatives ? store.adCreatives() : [],
+      regionCodes: (store.bookmakerConfig().regions || []).filter(function (r) { return (r.countries || []).indexOf(inp.cc || 'ZZ') !== -1; }).map(function (r) { return r.code; }), sports: sports, sport: 'football', streamOn: inp.streamOn !== false,
       liveCounts: store.liveCounts(), q: ''
     };
     return ctx;

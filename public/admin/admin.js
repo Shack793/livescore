@@ -9,7 +9,7 @@
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); });
   }
   function act(p, okMsg) { return p.then(function (r) { toast(okMsg || 'Saved'); return r; }).catch(function (e) { toast(e.message, true); throw e; }); }
-  var TABS = [['dashboard', 'Dashboard'], ['bookmakers', 'Bookmakers & regions'], ['regions', 'Region groups'], ['compliance', 'Country compliance'], ['ads', 'Ad slots'], ['leagues', 'Leagues'], ['settings', 'Settings']];
+  var TABS = [['dashboard', 'Dashboard'], ['bookmakers', 'Bookmakers & regions'], ['regions', 'Region groups'], ['compliance', 'Country compliance'], ['adsgeo', 'Ads by country'], ['ads', 'Ad slots'], ['leagues', 'Leagues'], ['settings', 'Settings']];
   function nav() { $('#nav').innerHTML = TABS.map(function (t) { return '<button data-t="' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + '</button>'; }).join(''); }
   document.addEventListener('click', function (e) { var b = e.target.closest('#nav button'); if (b) { tab = b.getAttribute('data-t'); show(); } });
   function show() { nav(); var v = $('#view'); v.innerHTML = '<p>Loading…</p>'; (VIEWS[tab] || VIEWS.dashboard)(v).catch(function (e) { v.innerHTML = '<div class="card">Error: ' + esc(e.message) + '</div>'; }); }
@@ -115,6 +115,40 @@
         var key = card.getAttribute('data-key') || g('key');
         if (t.classList.contains('save')) act(api('PUT', 'ad-slots/' + encodeURIComponent(key), { label: g('label'), placement: g('placement'), width: g('width'), height: g('height'), ad_code: g('ad_code'), fallback_code: g('fallback_code'), countries_include: g('countries_include'), countries_exclude: g('countries_exclude'), sort_order: g('sort_order'), betting_related: g('betting_related'), active: g('active') })).then(show);
         if (t.classList.contains('del-s') && confirm('Delete slot?')) act(api('DELETE', 'ad-slots/' + encodeURIComponent(key)), 'Deleted').then(show);
+      };
+    });
+  };
+
+  /* ---------- ads by country / region ---------- */
+  VIEWS.adsgeo = function (v) {
+    return Promise.all([api('GET', 'ad-creatives'), api('GET', 'ad-slots'), api('GET', 'meta')]).then(function (r) {
+      var list = r[0], slots = r[1], meta = r[2];
+      var regionOpts = meta.regions.map(function (x) { return '<option value="' + esc(x.code) + '">' + esc(x.name) + ' (' + esc(x.code) + ')</option>'; }).join('');
+      var slotOpts = function (sel) { return slots.map(function (s) { return '<option value="' + esc(s.slot_key) + '"' + (s.slot_key === sel ? ' selected' : '') + '>' + esc(s.label) + '</option>'; }).join(''); };
+      var scopeLabel = function (c) { return c.scope_type === 'all' ? 'Everywhere else' : c.scope_type === 'region' ? 'Region ' + c.scope_value : 'Country ' + c.scope_value; };
+      var row = function (c) {
+        c = c || { id: '', slot_key: slots[0] ? slots[0].slot_key : '', name: '', scope_type: 'country', scope_value: '', mode: 'show', ad_code: '', fallback_code: '', image_url: '', link_url: '', alt_text: '', betting_related: 0, priority: 0, active: 1 };
+        var sel = function (a, b) { return a === b ? ' selected' : ''; };
+        return '<div class="card" data-id="' + esc(c.id) + '"><div class="row">' +
+          '<label>Name (for you)<input data-k="name" value="' + esc(c.name) + '" placeholder="e.g. Ghana summer banner"></label>' +
+          '<label>Slot<select data-k="slot_key">' + slotOpts(c.slot_key) + '</select></label>' +
+          '<label>Who sees it<select data-k="scope_type"><option value="country"' + sel(c.scope_type, 'country') + '>One country</option><option value="region"' + sel(c.scope_type, 'region') + '>A region group</option><option value="all"' + sel(c.scope_type, 'all') + '>Everywhere else (default)</option></select></label>' +
+          '<label>Country code or region<input data-k="scope_value" list="regionlist2" value="' + esc(c.scope_type === 'all' ? '' : c.scope_value) + '" placeholder="GH  or  WEST_AFRICA"></label></div>' +
+          '<div class="row"><label>What to do<select data-k="mode"><option value="show"' + sel(c.mode, 'show') + '>Show this ad</option><option value="hide"' + sel(c.mode, 'hide') + '>Show no ad there</option></select></label>' +
+          '<label>Priority (higher wins a tie)<input data-k="priority" value="' + esc(c.priority) + '"></label></div>' +
+          '<label>Ad code (AdSense / ad-network tag / banner HTML)<textarea data-k="ad_code">' + esc(c.ad_code) + '</textarea></label>' +
+          '<div class="row"><label>…or banner image address<input data-k="image_url" value="' + esc(c.image_url) + '" placeholder="https://…/banner.png"></label><label>Banner click-through link<input data-k="link_url" value="' + esc(c.link_url) + '" placeholder="https://advertiser.com/…"></label></div>' +
+          '<label><input type="checkbox" data-k="betting_related" ' + (Number(c.betting_related) ? 'checked' : '') + ' style="width:auto"> Betting / casino ad (never shown where betting content is off)</label> <label><input type="checkbox" data-k="active" ' + (Number(c.active) ? 'checked' : '') + ' style="width:auto"> Active</label>' +
+          '<p class="gap"><button class="b save">Save</button>' + (c.id ? '<button class="b del-c">Delete</button> <span class="muted">' + esc(scopeLabel(c)) + '</span>' : '') + '</p></div>';
+      };
+      v.innerHTML = '<h2>Ads by country</h2><p class="muted">Each slot can have a different ad for each country or region. A visitor gets the most specific match: their <b>country</b> first, then their <b>region group</b>, then <b>Everywhere else</b>. If nothing matches, the slot falls back to its own default ad code (Ad slots tab), or a bookmaker banner for their country.</p>' +
+        '<datalist id="regionlist2">' + regionOpts + '</datalist>' + list.map(row).join('') + '<h3>New ad</h3>' + row(null);
+      v.onclick = function (e) {
+        var t = e.target, card = t.closest('[data-id]'); if (!card) return;
+        var g = function (k) { var el = card.querySelector('[data-k=' + k + ']'); return el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value; };
+        var id = card.getAttribute('data-id');
+        if (t.classList.contains('save')) act(api('PUT', 'ad-creatives/' + (id || 'new'), { name: g('name'), slot_key: g('slot_key'), scope_type: g('scope_type'), scope_value: g('scope_value'), mode: g('mode'), priority: g('priority'), ad_code: g('ad_code'), image_url: g('image_url'), link_url: g('link_url'), betting_related: g('betting_related'), active: g('active') })).then(show);
+        if (t.classList.contains('del-c') && confirm('Delete this ad?')) act(api('DELETE', 'ad-creatives/' + id), 'Deleted').then(show);
       };
     });
   };
