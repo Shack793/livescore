@@ -64,12 +64,20 @@ test('sport bar order: requested order, extra sports under More', async () => {
   } finally { await s.close(); }
 });
 
-test('country is automatic: no country picker unless SHOW_COUNTRY_PICKER=true', async () => {
-  const a = await boot({}), b = await boot({ SHOW_COUNTRY_PICKER: 'true' });
+test('country is automatic: geo-targeted without any picker', async () => {
+  const a = await boot({});
   try {
-    const x = await a.get('/?cc=GH'), y = await b.get('/?cc=GH');
+    const x = await a.get('/?cc=GH');
     assert.doesNotMatch(x.text, /id="ccBtn"|id="ccPop"|Choose your country/);
-    assert.match(y.text, /id="ccBtn"/);
     assert.match(x.text, /BetWave/); // still geo-targeted without a picker
-  } finally { await a.close(); await b.close(); }
+  } finally { await a.close(); }
+});
+
+test('header has no country picker; left menu keeps its league tree', async () => {
+  const s = await boot({});
+  try {
+    const t = (await s.get('/?cc=GH')).text;
+    assert.doesNotMatch(t, /id="ccBtn"|id="ccPop"|Choose your country/);
+    assert.match(t, /<h3>Countries<\/h3>/);
+  } finally { await s.close(); }
 });

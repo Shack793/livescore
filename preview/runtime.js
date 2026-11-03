@@ -9,7 +9,7 @@
   var store = LSN.storeMemory.create({ countryName: nameOf, regions: DATA.regions });
   var deviceTz = 'UTC'; try { deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { /* ignore */ }
   var root = document.getElementById('root');
-  var cfg = { siteName: 'LiveScoreNow', siteUrl: location.origin && location.origin !== 'null' ? location.origin : 'https://livescorenow.example', siteTz: deviceTz, assetV: 'p', contactEmail: 'hello@livescorenow.example', forumUrl: 'https://www.pitchsideforum.com', forumName: 'Pitchside Forum', showCountryPicker: false };
+  var cfg = { siteName: 'LiveScoreNow', siteUrl: location.origin && location.origin !== 'null' ? location.origin : 'https://livescorenow.example', siteTz: deviceTz, assetV: 'p', contactEmail: 'hello@livescorenow.example', forumUrl: 'https://www.pitchsideforum.com', forumName: 'Pitchside Forum' };
 
   // Country is detected automatically (like the real site does on the server). The preview is a static page, so it asks a
   // free IP-country service from the browser; ?cc=NG on the page address overrides it for testing. No visible country picker.

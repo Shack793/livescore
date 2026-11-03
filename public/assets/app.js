@@ -324,18 +324,6 @@
     sz.value = cur;
   }
   function closePops() { $$('.pop').forEach(function (p) { p.hidden = true; }); }
-  var ccData = null;
-  function openCountry() {
-    var pop = $('#ccPop'); if (!pop) return;
-    var willOpen = pop.hidden; closePops(); pop.hidden = !willOpen; if (!willOpen) return;
-    var inp = $('#ccFilter'); inp.value = ''; inp.focus();
-    (ccData ? Promise.resolve(ccData) : H.fetchJSON('/api/countries')).then(function (d) { ccData = d; renderCountries(''); });
-  }
-  function renderCountries(q) {
-    var ul = $('#ccList'); if (!ul || !ccData) return; q = q.toLowerCase();
-    var rows = ccData.filter(function (c) { return !q || c[1].toLowerCase().indexOf(q) !== -1 || c[0].toLowerCase() === q; }).slice(0, 80);
-    ul.innerHTML = rows.map(function (c) { return '<li class="' + (c[0] === CFG.cc ? 'cur' : '') + '"><a href="#" data-cc="' + c[0] + '"><img class="flag" src="https://flagcdn.com/w20/' + c[0].toLowerCase() + '.png" alt="" width="20" height="14" loading="lazy">' + esc(c[1]) + '</a></li>'; }).join('') || '<li class="muted small" style="padding:8px">No match</li>';
-  }
   var suggTimer = null, suggSeq = 0;
   function suggest(q) {
     var box = $('#sugg'); if (!box) return;
@@ -373,10 +361,8 @@
       if ((el = t.closest('[data-unfollow]'))) { var uid = +el.getAttribute('data-unfollow'); lsSet('lsn_teams', teams().filter(function (x) { return x.id !== uid; })); paintStars(); paintSidebars(); paintFavTeams(); loadFavorites(); return; }
       if (t.closest('#shareBtn')) { var ids = teams().map(function (x) { return x.id; }).join(','); if (!ids) { var sm = $('#shareMsg'); if (sm) sm.textContent = 'Follow a team first.'; return; } var link = H.shareUrl(ids); var done = function () { var sm = $('#shareMsg'); if (sm) sm.textContent = 'Link copied — open it on your other device and tap “Add to my teams”.'; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, function () { window.prompt('Copy this link:', link); }); else window.prompt('Copy this link:', link); return; }
       if (t.closest('#setBtn')) { openSettings(); return; }
-      if (t.closest('#ccBtn')) { openCountry(); return; }
       if (t.closest('#menuBtn')) { var cl = $('.col-left'); if (cl) cl.classList.toggle('open'); return; }
       if (t.closest('#searchBtn')) { var s = $('.search'); if (s) { s.classList.toggle('open'); var i = $('#q'); if (i) i.focus(); } return; }
-      if ((el = t.closest('#ccList a[data-cc]'))) { e.preventDefault(); H.setRegion(el.getAttribute('data-cc')); return; }
       if ((el = t.closest('[data-consent]')) && el.tagName === 'BUTTON') { setCookie('lsn_consent', el.getAttribute('data-consent')); var b = $('#consent'); if (b) b.remove(); CFG.consent = el.getAttribute('data-consent'); $$('.ad[data-slot]').forEach(function (a) { a.removeAttribute('data-ran'); }); loadAds(document); return; }
       if (!t.closest('.pop') && !t.closest('.icon-btn')) closePops();
       if (!t.closest('.search')) { var sg = $('#sugg'); if (sg) sg.hidden = true; }
@@ -392,7 +378,6 @@
     });
     document.addEventListener('input', function (e) {
       if (e.target.id === 'q') suggest(e.target.value);
-      else if (e.target.id === 'ccFilter') renderCountries(e.target.value);
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') { closePops(); var sg = $('#sugg'); if (sg) sg.hidden = true; }
