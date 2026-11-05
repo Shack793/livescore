@@ -54,7 +54,12 @@
     var ini = String(t.name || '?').replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase() || '?';
     return '<span class="crest ini ' + (cls || '') + '" style="--h:' + (U.hash32(t.name) % 360) + '" aria-hidden="true">' + E(ini) + '</span>';
   }
-  function bkChip(b) { return '<span class="bkchip" style="--c:' + E(b.color || '#555') + '" title="' + E(b.name) + '">' + E(b.short_code || b.name.slice(0, 2)) + '</span>'; }
+  function bkChip(b) {
+    var lg = String(b.logo_url || '').trim();
+    if (/^(https?:\/\/|\/)[^\s"'<>]+$/i.test(lg)) return '<span class="bkchip logo" title="' + E(b.name) + '"><img src="' + E(lg) + '" alt="' + E(b.name) + '" loading="lazy"></span>';
+    return bkChipText(b);
+  }
+  function bkChipText(b) { return '<span class="bkchip" style="--c:' + E(b.color || '#555') + '" title="' + E(b.name) + '">' + E(b.short_code || b.name.slice(0, 2)) + '</span>'; }
   function goUrl(bkId, matchId, placement) { return '/go/' + bkId + '?p=' + encodeURIComponent(placement || '') + (matchId ? '&m=' + matchId : ''); }
   function cta(b, matchId, placement, label) {
     return '<a class="cta" href="' + goUrl(b.id, matchId, placement) + '" target="_blank" rel="sponsored nofollow noopener">' + E(label || 'Bet now') + '</a>';

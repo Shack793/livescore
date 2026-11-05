@@ -57,3 +57,13 @@ test('betting ads never show where betting is off', async () => {
   assert.match(await page('GH'), /CASINO-AD/);
   assert.doesNotMatch(await page('US'), /CASINO-AD/);   // betting content is off in the US
 });
+
+test('bookmaker logo is shown when a logo address is set', async () => {
+  const r = await fetch(base + '/admin/api/bookmakers', { method: 'POST', headers: H, body: JSON.stringify({ name: 'LogoBet', short_code: 'LB', color: '#123456', logo_url: 'https://cdn.example/logobet.png', affiliate_url: 'https://aff.example/?s={subid}', offer: 'Test offer', active: 1, sort_order: 1, rules: [{ scope_type: 'country', scope_value: 'GH', mode: 'allow' }] }) });
+  assert.strictEqual(r.status, 200);
+  const gh = await page('GH');
+  assert.match(gh, /<img src="https:\/\/cdn\.example\/logobet\.png" alt="LogoBet"/);
+  assert.doesNotMatch(await page('GB'), /logobet\.png/);
+  const bad = await fetch(base + '/admin/api/bookmakers', { method: 'POST', headers: H, body: JSON.stringify({ name: 'Evil', logo_url: 'javascript:alert(1)', affiliate_url: 'https://a.example', rules: [] }) });
+  assert.strictEqual(bad.status, 400);
+});

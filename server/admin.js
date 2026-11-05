@@ -33,9 +33,20 @@ function create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches }) {
     const rules = db.all('SELECT scope_type,scope_value,mode,affiliate_url,offer,license_text,sort_order FROM bookmaker_geo WHERE bookmaker_id=? ORDER BY scope_type,scope_value', row.id);
     return Object.assign({}, row, { rules });
   }
+  // 1xBet exists once per sport feed (af:b11, ab:b3, ...). Picking any one of them connects them all.
+  function expandFeedRefs(v) {
+    const first = String(v || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (!first.length) return '';
+    const all = db.all('SELECT ref,name FROM feed_bookmakers');
+    const norm = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const names = new Set(first.map((r) => { const f = all.find((x) => x.ref === r); return f ? norm(f.name) : null; }).filter(Boolean));
+    const out = new Set(first);
+    all.forEach((x) => { if (names.has(norm(x.name))) out.add(x.ref); });
+    return Array.from(out).join(',').slice(0, 600);
+  }
   function saveBookmaker(id, b) {
     const name = str(b.name, 80); if (!name) throw err(400, 'Name is required');
-    const rec = [name, str(b.short_code || name.slice(0, 2).toUpperCase(), 4), str(b.color, 9), url(b.logo_url), str(b.provider_ref, 80), url(b.affiliate_url, true), str(b.offer, 200), url(b.terms_url), str(b.license_text, 500), flag(b.active), int(b.sort_order, 0)];
+    const rec = [name, str(b.short_code || name.slice(0, 2).toUpperCase(), 4), str(b.color, 9), url(b.logo_url), expandFeedRefs(str(b.provider_ref, 600)), url(b.affiliate_url, true), str(b.offer, 200), url(b.terms_url), str(b.license_text, 500), flag(b.active), int(b.sort_order, 0)];
     const regions = regionCodes();
     const rules = (Array.isArray(b.rules) ? b.rules : []).map((r) => {
       const t = str(r.scope_type, 10), v = t === 'all' ? '*' : str(r.scope_value, 40).toUpperCase();

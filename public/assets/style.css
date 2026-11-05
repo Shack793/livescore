@@ -363,3 +363,7 @@ body{overflow-x:hidden;overflow-x:clip;max-width:100%;position:relative}
 .wrap,.layout,.main,.stabs,.top{max-width:100%}
 .main,.col-right{overflow-x:clip}
 .stabs-in,.dn-days,.filters,.subtabs,.tblwrap{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+
+/* bookmaker logo in place of the coloured text chip */
+.bkchip.logo{background:#fff;border:1px solid var(--line);padding:2px 6px;min-width:44px;height:24px}
+.bkchip.logo img{display:block;max-height:18px;max-width:72px;width:auto;height:auto}

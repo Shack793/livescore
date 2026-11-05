@@ -38,6 +38,13 @@
     return idx;
   }
 
+  // A bookmaker can list several feed references (one per sport feed, e.g. "af:b11,ab:b3"): use the first one this match has odds for.
+  function refIn(idx, b) {
+    var refs = String(b.provider_ref || '').split(',');
+    for (var i = 0; i < refs.length; i++) { var r = refs[i].trim(); if (r && idx[r]) return idx[r]; }
+    return null;
+  }
+
   // First visible bookmaker (by priority) that has the sport's main market.
   function primary(rows, bkItems, sport) {
     var cfg = MAIN_MARKET[sport] || MAIN_MARKET.football;
@@ -45,7 +52,7 @@
     for (var i = 0; i < bkItems.length; i++) {
       var b = bkItems[i];
       if (!b.provider_ref) continue;
-      var m = idx[b.provider_ref] && idx[b.provider_ref][cfg.market];
+      var bi = refIn(idx, b), m = bi && bi[cfg.market];
       if (!m) continue;
       var ok = cfg.sels.every(function (s) { return m[s] && isFinite(m[s].value); });
       if (!ok) continue;
@@ -68,7 +75,7 @@
     Object.keys(MARKET_SELS).forEach(function (market) {
       var lines = [];
       bkItems.forEach(function (b) {
-        var m = b.provider_ref && idx[b.provider_ref] && idx[b.provider_ref][market];
+        var bi = b.provider_ref && refIn(idx, b), m = bi && bi[market];
         if (!m) return;
         var vals = MARKET_SELS[market].map(function (s) { return m[s[0]] ? m[s[0]] : null; });
         if (vals.every(function (v) { return !v; })) return;
