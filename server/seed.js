@@ -3,6 +3,7 @@
 const countries = require('./geo/countries');
 const seed = require('../shared/seed-data');
 const mockData = require('../shared/mock-data');
+const presets = require('./presets');
 
 function run(db, opts) {
   opts = opts || {};
@@ -21,6 +22,8 @@ function run(db, opts) {
     if (!db.get('SELECT COUNT(*) n FROM ad_creatives').n && opts.demoBookmakers !== false && (seed.adCreatives || []).length) {
       seed.adCreatives.forEach((a) => db.run('INSERT INTO ad_creatives (slot_key,name,scope_type,scope_value,mode,ad_code) VALUES (?,?,?,?,?,?)', a.slot_key, a.name, a.scope_type, a.scope_value, a.mode || 'show', a.ad_code || ''));
     }
+    presets.install(db);
+    presets.linkFeed(db);
     [['odds_format', 'decimal'], ['site_tagline', 'Live scores, fixtures & odds'], ['footer_note', '']].forEach((kv) => db.run('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)', kv[0], kv[1]));
   });
 }

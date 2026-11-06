@@ -18,6 +18,7 @@ async function start(overrides) {
   const log = (overrides && overrides.log) || ((m) => console.log(new Date().toISOString() + ' ' + m));
   const db = dbmod.open(cfg.dbPath);
   seed.run(db, { demoBookmakers: cfg.provider === 'mock' });
+  try { const x = db.get("SELECT id,active,provider_ref FROM bookmakers WHERE LOWER(name)='1xbet'"); log('1xBet preset: ' + (x ? 'present (id ' + x.id + ', ' + (x.active ? 'active' : 'switched off') + ', odds refs: ' + (x.provider_ref || 'none yet') + ')' : 'NOT present') + '; data provider: ' + cfg.provider); } catch (e) { /* ignore */ }
   const store = storeMod.create(db);
   const geoip = new GeoIP();
   try { const n = geoip.loadFromDb(db); log('geoip: ' + n + ' ranges loaded' + (n ? '' : ' (run "npm run geoip:update" to enable IP-based country detection)')); } catch (e) { log('geoip: ' + e.message); }

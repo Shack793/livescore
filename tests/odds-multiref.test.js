@@ -21,7 +21,8 @@ test('admin: choosing one 1xBet feed entry connects all of its sport feeds', asy
   try {
     [['af:b11', '1xBet'], ['ab:b3', '1xBet'], ['bs:b1', '1xbet'], ['af:b8', 'Bet365']].forEach(([r, n]) => S.db.run('INSERT OR REPLACE INTO feed_bookmakers (ref,name,seen_at) VALUES (?,?,?)', r, n, 1));
     const H = { authorization: 'Basic ' + Buffer.from('admin:pw').toString('base64'), 'x-lsn-admin': '1', 'content-type': 'application/json' };
-    const r = await fetch('http://127.0.0.1:' + S.port + '/admin/api/bookmakers', { method: 'POST', headers: H, body: JSON.stringify({ name: '1xBet', provider_ref: 'af:b11', affiliate_url: 'https://aff.example', active: 1, rules: [] }) });
+    S.db.run("DELETE FROM bookmakers WHERE name='1xBet'");
+    const r = await fetch('http://127.0.0.1:' + S.port + '/admin/api/bookmakers', { method: 'POST', headers: H, body: JSON.stringify({ name: '1xBet', provider_ref: 'af:b11', affiliate_url: 'https://aff.example', active: 1, rules: [] }) }); // the built-in preset is replaced by this admin save
     assert.strictEqual(r.status, 200);
     const ref = S.db.get("SELECT provider_ref FROM bookmakers WHERE name='1xBet'").provider_ref.split(',').sort();
     assert.deepStrictEqual(ref, ['ab:b3', 'af:b11', 'bs:b1']);
