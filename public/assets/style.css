@@ -365,5 +365,5 @@ body{overflow-x:hidden;overflow-x:clip;max-width:100%;position:relative}
 .stabs-in,.dn-days,.filters,.subtabs,.tblwrap{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
 
 /* bookmaker logo in place of the coloured text chip */
-.bkchip.logo{background:#fff;border:1px solid var(--line);padding:2px 6px;min-width:44px;height:24px}
-.bkchip.logo img{display:block;max-height:18px;max-width:72px;width:auto;height:auto}
+.bkchip.logo{background:#fff;border:1px solid var(--line);padding:0;min-width:44px;height:26px;overflow:hidden;border-radius:5px}
+.bkchip.logo img{display:block;max-height:26px;max-width:84px;width:auto;height:auto}

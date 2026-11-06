@@ -109,6 +109,7 @@ function create({ db, provider, cfg, hub, log }) {
     const fb = await provider.feedBookmakers();
     log('bookmakers: ' + ((fb || []).length) + ' pulled');
     db.tx(() => ((fb || []).filter((b) => b && b.ref && b.name) || []).forEach((b) => db.run('INSERT INTO feed_bookmakers (ref,name,seen_at) VALUES (?,?,?) ON CONFLICT(ref) DO UPDATE SET name=excluded.name, seen_at=excluded.seen_at', b.ref, b.name, nowSec())));
+    try { require('../presets').linkFeed(db); } catch (e) { /* non-fatal */ }
     status.counts.leagues = ids.league.size; status.counts.teams = ids.team.size;
   }
 
@@ -362,6 +363,7 @@ function create({ db, provider, cfg, hub, log }) {
       ['odds_current', 'match_details', 'standings', 'squads', 'matches', 'teams', 'leagues', 'countries', 'feed_bookmakers'].forEach((t) => db.run('DELETE FROM ' + t));
       const demo = db.all("SELECT id FROM bookmakers WHERE provider_ref LIKE 'mock-%' AND affiliate_url LIKE 'https://example.com/%'");
       demo.forEach((b) => { db.run('DELETE FROM bookmaker_geo WHERE bookmaker_id=?', b.id); db.run('DELETE FROM bookmakers WHERE id=?', b.id); });
+      require('../presets').install(db);
     });
   }
   // A restart forgets which feed the previous process used, so rows left behind by the

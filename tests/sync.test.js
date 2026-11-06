@@ -174,6 +174,6 @@ test('switching from demo to a real provider purges simulated data and demo book
   await s2.start();
   assert.strictEqual(db.get('SELECT COUNT(*) n FROM matches').n, 0);
   assert.strictEqual(db.get('SELECT COUNT(*) n FROM teams').n, 0);
-  assert.deepStrictEqual(db.all('SELECT name FROM bookmakers').map((r) => r.name), ['Mine']);
+  assert.deepStrictEqual(db.all('SELECT name FROM bookmakers').map((r) => r.name).sort(), ['1xBet', 'Mine']);
   assert.strictEqual(db.get("SELECT value FROM settings WHERE key='data_mode'").value, 'live');
 });
