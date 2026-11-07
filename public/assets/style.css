@@ -366,4 +366,5 @@ body{overflow-x:hidden;overflow-x:clip;max-width:100%;position:relative}
 
 /* bookmaker logo in place of the coloured text chip */
 .bkchip.logo{background:#fff;border:1px solid var(--line);padding:0;min-width:44px;height:26px;overflow:hidden;border-radius:5px}
+.mr-odds .bkchip.logo{height:20px;min-width:36px}.mr-odds .bkchip.logo img{max-height:20px;max-width:64px}
 .bkchip.logo img{display:block;max-height:26px;max-width:84px;width:auto;height:auto}

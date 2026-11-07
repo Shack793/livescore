@@ -9,7 +9,7 @@
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || r.status); return j; }); });
   }
   function act(p, okMsg) { return p.then(function (r) { toast(okMsg || 'Saved'); return r; }).catch(function (e) { toast(e.message, true); throw e; }); }
-  var TABS = [['dashboard', 'Dashboard'], ['bookmakers', 'Bookmakers & regions'], ['regions', 'Region groups'], ['compliance', 'Country compliance'], ['adsgeo', 'Ads by country'], ['ads', 'Ad slots'], ['leagues', 'Leagues'], ['settings', 'Settings']];
+  var TABS = [['dashboard', 'Dashboard'], ['reports', 'Reports'], ['bookmakers', 'Bookmakers & regions'], ['regions', 'Region groups'], ['compliance', 'Country compliance'], ['adsgeo', 'Ads by country'], ['ads', 'Ad slots'], ['leagues', 'Leagues'], ['settings', 'Settings']];
   function nav() { $('#nav').innerHTML = TABS.map(function (t) { return '<button data-t="' + t[0] + '" class="' + (t[0] === tab ? 'on' : '') + '">' + t[1] + '</button>'; }).join(''); }
   document.addEventListener('click', function (e) { var b = e.target.closest('#nav button'); if (b) { tab = b.getAttribute('data-t'); show(); } });
   function show() { nav(); var v = $('#view'); v.innerHTML = '<p>Loading…</p>'; (VIEWS[tab] || VIEWS.dashboard)(v).catch(function (e) { v.innerHTML = '<div class="card">Error: ' + esc(e.message) + '</div>'; }); }
@@ -17,14 +17,47 @@
   var VIEWS = {};
   /* ---------- dashboard ---------- */
   VIEWS.dashboard = function (v) {
-    return Promise.all([api('GET', 'status'), api('GET', 'clicks?days=7')]).then(function (r) {
-      var s = r[0], c = r[1], max = Math.max.apply(null, c.byBookmaker.map(function (x) { return x.n; }).concat([1]));
+    return Promise.all([api('GET', 'status'), api('GET', 'clicks?days=7'), api('GET', 'traffic/summary')]).then(function (r) {
+      var s = r[0], c = r[1], tv = r[2], max = Math.max.apply(null, c.byBookmaker.map(function (x) { return x.n; }).concat([1]));
       var jobs = Object.keys(s.sync.jobs || {}).map(function (k) { var j = s.sync.jobs[k]; return '<tr><td>' + esc(k) + '</td><td>' + j.runs + '</td><td><span class="pill ' + (j.errors ? 'bad' : 'ok') + '">' + j.errors + ' errors</span></td><td>' + (j.lastOk ? new Date(j.lastOk * 1000).toLocaleTimeString() : '–') + '</td><td>' + (j.lastMs || '') + ' ms</td><td class="muted">' + esc(j.lastError || '') + '</td><td><button class="b sec" data-job="' + k + '">Run now</button></td></tr>'; }).join('');
-      v.innerHTML = '<h2>Dashboard</h2><div class="row"><div class="card"><b>Data provider</b><br>' + esc(s.sync.provider) + ' <span class="muted">' + esc(JSON.stringify(s.sync.providerStatus || {})) + '</span></div><div class="card"><b>Live viewers connected</b><br><span style="font-size:28px">' + s.viewers + '</span></div><div class="card"><b>IP→country ranges</b><br>' + s.geoipRanges + (s.geoipRanges ? '' : ' <span class="pill bad">not loaded — run npm run geoip:update</span>') + '</div></div>' +
+      v.innerHTML = '<h2>Dashboard</h2><div class="card"><h3 style="margin-top:0">Visitors <span class="muted">(full details under Reports)</span></h3><div class="row">' + [['Today', tv.today], ['Last 7 days', tv.week], ['Last 30 days', tv.month]].map(function (x) { return '<div><b>' + x[0] + '</b><br><span style="font-size:22px;font-weight:700">' + num(x[1].visitors) + '</span> visitors · ' + num(x[1].views) + ' page views</div>'; }).join('') + '</div></div><div class="row"><div class="card"><b>Data provider</b><br>' + esc(s.sync.provider) + ' <span class="muted">' + esc(JSON.stringify(s.sync.providerStatus || {})) + '</span></div><div class="card"><b>Live viewers connected</b><br><span style="font-size:28px">' + s.viewers + '</span></div><div class="card"><b>IP→country ranges</b><br>' + s.geoipRanges + (s.geoipRanges ? '' : ' <span class="pill bad">not loaded — run npm run geoip:update</span>') + '</div></div>' +
         '<div class="card"><h3 style="margin-top:0">Database</h3>' + Object.keys(s.counts).map(function (k) { return '<span class="pill">' + k + ': ' + s.counts[k] + '</span> '; }).join('') + '</div>' +
         '<div class="card"><h3 style="margin-top:0">Sync jobs</h3><table><tr><th>Job</th><th>Runs</th><th>Errors</th><th>Last OK</th><th>Time</th><th>Last error</th><th></th></tr>' + jobs + '</table></div>' +
         '<div class="card"><h3 style="margin-top:0">Affiliate clicks (last 7 days): ' + c.total + '</h3><div class="row"><div><b>By bookmaker</b><div class="bars">' + c.byBookmaker.map(function (x) { return '<div><span style="width:110px">' + esc(x.name) + '</span><i style="width:' + Math.round(x.n / max * 160) + 'px"></i>' + x.n + '</div>'; }).join('') + '</div></div><div><b>By country</b><div>' + c.byCountry.map(function (x) { return '<span class="pill">' + esc(x.country) + ' ' + x.n + '</span> '; }).join('') + '</div></div><div><b>By placement</b><div>' + c.byPlacement.map(function (x) { return '<span class="pill">' + esc(x.placement || '–') + ' ' + x.n + '</span> '; }).join('') + '</div></div></div></div>';
       v.onclick = function (e) { var b = e.target.closest('[data-job]'); if (b) act(api('POST', 'sync/' + b.getAttribute('data-job')), 'Started'); };
+    });
+  };
+
+  /* ---------- reports (visits) ---------- */
+  var RP = { days: 30, from: '', to: '' };
+  function num(n) { return Number(n || 0).toLocaleString('en-US'); }
+  function barTable(rows, cols, keyLabel) {
+    var max = Math.max.apply(null, rows.map(function (r) { return r.views; }).concat([1]));
+    return '<table><tr><th>' + keyLabel + '</th>' + cols.map(function (c) { return '<th style="text-align:right">' + c[1] + '</th>'; }).join('') + '<th style="width:30%"></th></tr>' +
+      (rows.length ? rows.map(function (r) { return '<tr><td>' + esc(r.label) + '</td>' + cols.map(function (c) { return '<td style="text-align:right">' + num(r[c[0]]) + '</td>'; }).join('') + '<td><div class="bars"><div><i style="width:' + Math.round(r.views / max * 100) + '%"></i></div></div></td></tr>'; }).join('') : '<tr><td colspan="9" class="muted">No visits recorded in this period yet.</td></tr>') + '</table>';
+  }
+  function csvBtn(by, qs) { return '<a class="b sec" style="text-decoration:none;display:inline-block" href="/admin/api/traffic/csv?by=' + by + '&' + qs + '">Download CSV</a>'; }
+  VIEWS.reports = function (v) {
+    var qs = RP.from && RP.to ? 'from=' + RP.from + '&to=' + RP.to : 'days=' + RP.days;
+    return api('GET', 'traffic?' + qs).then(function (r) {
+      var t = r.totals, ctr = t.visitors ? (t.clicks / t.visitors * 100).toFixed(1) + '%' : '–';
+      var q2 = 'from=' + r.from + '&to=' + r.to;
+      v.innerHTML = '<h2>Reports</h2>' +
+        '<div class="card"><div class="row"><div>' + [7, 30, 90, 365].map(function (d) { return '<button class="b ' + (!RP.from && RP.days === d ? '' : 'sec') + '" data-days="' + d + '">Last ' + d + ' days</button> '; }).join('') + '</div>' +
+        '<div><label>From<input type="date" id="rp-from" value="' + esc(r.from) + '"></label></div><div><label>To<input type="date" id="rp-to" value="' + esc(r.to) + '"></label></div><div><button class="b" id="rp-go" type="button">Show</button></div></div>' +
+        '<p class="muted">Showing ' + esc(r.from) + ' to ' + esc(r.to) + '. Days are counted in UTC. Visitors are counted anonymously (no IP addresses are stored), so a person using two devices counts twice.</p></div>' +
+        '<div class="row"><div class="card"><b>Unique visitors</b><h2 style="margin:4px 0">' + num(t.visitors) + '</h2></div><div class="card"><b>Page views</b><h2 style="margin:4px 0">' + num(t.views) + '</h2></div><div class="card"><b>Visitor-days</b><h2 style="margin:4px 0">' + num(t.visitorDays) + '</h2><span class="muted">visitors added up per day</span></div><div class="card"><b>Affiliate clicks</b><h2 style="margin:4px 0">' + num(t.clicks) + '</h2><span class="muted">' + ctr + ' of visitors</span></div></div>' +
+        '<div class="card"><h3 style="margin-top:0">By day</h3>' + barTable(r.byDay.slice().reverse(), [['visitors', 'Visitors'], ['views', 'Page views']], 'Day') + '<p>' + csvBtn('day', q2) + '</p></div>' +
+        '<div class="card"><h3 style="margin-top:0">By week <span class="muted">(week starting Monday)</span></h3>' + barTable(r.byWeek.slice().reverse(), [['visitors', 'Visitors'], ['views', 'Page views']], 'Week starting') + '<p>' + csvBtn('week', q2) + '</p></div>' +
+        '<div class="card"><h3 style="margin-top:0">By month</h3>' + barTable(r.byMonth.slice().reverse(), [['visitors', 'Visitors'], ['views', 'Page views']], 'Month') + '<p>' + csvBtn('month', q2) + '</p></div>' +
+        '<div class="card"><h3 style="margin-top:0">By country</h3>' + barTable(r.byCountry.map(function (x) { return { label: x.country + ' (' + x.code + ')', views: x.views, visitors: x.visitors, clicks: x.clicks }; }), [['visitors', 'Visitors'], ['views', 'Page views'], ['clicks', 'Clicks']], 'Country') + '<p>' + csvBtn('country', q2) + '</p></div>' +
+        '<div class="row"><div class="card"><h3 style="margin-top:0">Top pages</h3>' + barTable(r.pages.map(function (x) { return { label: x.page, views: x.views }; }), [['views', 'Views']], 'Page') + '<p>' + csvBtn('pages', q2) + '</p></div>' +
+        '<div class="card"><h3 style="margin-top:0">Where visitors came from</h3>' + barTable(r.referrers.map(function (x) { return { label: x.host, views: x.views }; }), [['views', 'Views']], 'Website') + '<p class="muted">Visitors with no referring website (typed the address, bookmarks, apps) are not listed.</p><p>' + csvBtn('referrers', q2) + '</p></div></div>' +
+        '<div class="card"><h3 style="margin-top:0">Affiliate clicks by bookmaker</h3>' + barTable(r.clicksByBookmaker.map(function (x) { return { label: x.name, views: x.n }; }), [['views', 'Clicks']], 'Bookmaker') + '</div>';
+      v.onclick = function (e) {
+        var d = e.target.closest('[data-days]'); if (d) { RP = { days: Number(d.getAttribute('data-days')), from: '', to: '' }; show(); }
+        if (e.target.id === 'rp-go') { var f = $('#rp-from').value, tt = $('#rp-to').value; if (f && tt) { RP = { days: 30, from: f, to: tt }; show(); } }
+      };
     });
   };
 

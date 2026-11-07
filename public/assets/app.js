@@ -201,7 +201,8 @@
   }
   function oddsHtml(it) {
     var f = oddsFmt();
-    return '<span class="bkchip" style="--c:' + esc(it.bc || '#555') + '" title="' + esc(it.bn) + '">' + esc(it.bs || '') + '</span>' + it.cells.map(function (c) {
+    var chip = /^(https?:\/\/|\/)[^\s"'<>]+$/i.test(it.bl || '') ? '<span class="bkchip logo" title="' + esc(it.bn) + '"><img src="' + esc(it.bl) + '" alt="' + esc(it.bn) + '"></span>' : '<span class="bkchip" style="--c:' + esc(it.bc || '#555') + '" title="' + esc(it.bn) + '">' + esc(it.bs || '') + '</span>';
+    return chip + it.cells.map(function (c) {
       return '<a class="odd' + (c.trend ? ' ' + c.trend : '') + '" data-dec="' + c.value + '" data-sel="' + esc(c.sel) + '" href="/go/' + it.bk + '?p=list&m=' + it.id + '" target="_blank" rel="sponsored nofollow noopener">' + esc(fmtOdd(c.value, f)) + '</a>';
     }).join('');
   }

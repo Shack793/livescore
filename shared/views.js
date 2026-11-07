@@ -84,7 +84,7 @@
     var st = statusOf(m, ctx.tz), cfg = O.MAIN_MARKET[m.sport] || O.MAIN_MARKET.football, odds = '';
     if (ctx.bettingOn) {
       if (prim && m.status !== 'finished') {
-        odds = '<span class="mr-odds" data-bk="' + prim.bookmaker_id + '">' + bkChip({ short_code: shortOf(ctx, prim.bookmaker_id), name: prim.bookmaker_name, color: colorOf(ctx, prim.bookmaker_id) }) +
+        odds = '<span class="mr-odds" data-bk="' + prim.bookmaker_id + '">' + bkChip({ short_code: shortOf(ctx, prim.bookmaker_id), name: prim.bookmaker_name, color: colorOf(ctx, prim.bookmaker_id), logo_url: logoOf(ctx, prim.bookmaker_id) }) +
           prim.cells.map(function (c) { return oddCell(c, prim.bookmaker_id, m.id, ctx); }).join('') + '</span>';
       } else {
         odds = '<span class="mr-odds none">' + cfg.sels.map(function () { return '<span class="odd na">–</span>'; }).join('') + '</span>';
@@ -101,6 +101,7 @@
   function bkOf(ctx, id) { for (var i = 0; i < ctx.bk.items.length; i++) if (ctx.bk.items[i].id === id) return ctx.bk.items[i]; return null; }
   function shortOf(ctx, id) { var b = bkOf(ctx, id); return b ? b.short_code : ''; }
   function colorOf(ctx, id) { var b = bkOf(ctx, id); return b ? b.color : ''; }
+  function logoOf(ctx, id) { var b = bkOf(ctx, id); return b ? b.logo_url : ''; }
 
   function leagueHead(ctx, sport, lg, country) {
     return '<div class="lg-head" data-lg="' + lg.id + '">' +

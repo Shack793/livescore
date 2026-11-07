@@ -20,3 +20,31 @@ test('preset: 1xBet is built in, hidden in GB/FR/US, shown elsewhere, odds auto-
     assert.strictEqual(S.db.get('SELECT provider_ref r FROM bookmakers WHERE id=?', b.id).r, 'af:b11,ab:b3');
   } finally { await S.close(); }
 });
+
+test('preset: 1xBet banner shows in the in-feed slot except GB/FR/US', async () => {
+  const dbFile = path.join(os.tmpdir(), 'lsn-prea-' + process.pid + '-' + Date.now() + '.db');
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: dbFile, SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
+  try {
+    const page = async (cc, date) => (await fetch('http://127.0.0.1:' + S.port + '/?cc=' + cc + (date ? '&date=' + date : ''))).text();
+    // The in-feed slot only renders once the day has at least four league groups, so pick a date that has them.
+    let gh = '', date = '';
+    for (let i = 0; i < 14 && !gh; i++) {
+      const d = new Date(Date.now() + i * 86400000).toISOString().slice(0, 10);
+      const h = await page('GH', d);
+      if (h.includes('data-slot="infeed"')) { gh = h; date = d; }
+    }
+    assert.ok(gh && gh.includes('refbanners.com/I?tag=d_6306719m_2811c_'), 'shown in Ghana');
+    for (const cc of ['GB', 'FR', 'US']) assert.ok(!(await page(cc, date)).includes('refbanners.com'), 'hidden in ' + cc);
+  } finally { await S.close(); }
+});
+
+test('logo also shows next to the odds in match rows', async () => {
+  const dbFile = path.join(os.tmpdir(), 'lsn-prel-' + process.pid + '-' + Date.now() + '.db');
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: dbFile, SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
+  try {
+    S.db.run("UPDATE bookmakers SET logo_url='/assets/logos/1xbet.png' WHERE id=1");
+    const h = await (await fetch('http://127.0.0.1:' + S.port + '/?cc=GH')).text();
+    const m = h.match(/<span class="mr-odds"[^>]*>.{0,400}/);
+    assert.ok(m && m[0].includes('<span class="bkchip logo"') && m[0].includes('/assets/logos/1xbet.png'), 'odds row shows the logo');
+  } finally { await S.close(); }
+});

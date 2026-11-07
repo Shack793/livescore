@@ -6,7 +6,7 @@ const http = require('./lib/http');
 const countries = require('./geo/countries');
 const B = require('../shared/bookmakers');
 
-function create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches }) {
+function create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches, analytics }) {
   const pub = path.join(cfg.root, 'public', 'admin');
   const fails = http.makeLimiter(10, 15 * 60 * 1000);
   const err = (code, msg) => Object.assign(new Error(msg), { code });
@@ -159,6 +159,12 @@ function create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches }) {
     if (a === 'status' && m === 'GET') {
       const n = (t) => db.get('SELECT COUNT(*) n FROM ' + t).n;
       return ok({ sync: sync.status(), jobs: sync.jobs, viewers: hub.size(), geoipRanges: geoip.count, counts: { sports: n('sports'), countries: n('countries'), leagues: n('leagues'), teams: n('teams'), matches: n('matches'), odds: n('odds_current'), clicks: n('clicks') } });
+    }
+    if (a === 'traffic' && m === 'GET') {
+      const q = { from: u.searchParams.get('from'), to: u.searchParams.get('to'), days: int(u.searchParams.get('days'), 30), by: u.searchParams.get('by') };
+      if (b === 'summary') return ok(analytics.summary());
+      if (b === 'csv') return http.send(req, res, 200, analytics.csv(q), { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="livescorenow-' + String(q.by || 'day').replace(/[^a-z]/g, '') + '-report.csv"', 'Cache-Control': 'no-store' });
+      return ok(analytics.report(q));
     }
     if (a === 'sync' && m === 'POST' && b) { if (!sync.jobs.includes(b)) throw err(404, 'Unknown job'); sync.runJob(b); return ok(); }
     if (a === 'clicks' && m === 'GET') {

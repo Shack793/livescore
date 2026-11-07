@@ -11,9 +11,29 @@ const PRESETS = [
     rules: [['all', '*', 'allow'], ['country', 'GB', 'block'], ['country', 'FR', 'block'], ['country', 'US', 'block']]
   }
 ];
+// Ready-made banners from partner programs. Created once, never overwritten; shown by country like any ad.
+const AD_PRESETS = [
+  {
+    slot_key: 'infeed', name: '1xBet banner 320x100 (in-feed)', betting_related: 1, priority: 0,
+    ad_code: '<div style="text-align:center"><iframe scrolling="no" frameBorder="0" style="padding:0;margin:0;border:0" width="320" height="100" src="https://refbanners.com/I?tag=d_6306719m_2811c_&site=6306719&ad=2811"></iframe></div>',
+    rules: [['all', '*', 'show'], ['country', 'GB', 'hide'], ['country', 'FR', 'hide'], ['country', 'US', 'hide']]
+  }
+];
 const norm = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+function installAds(db) {
+  AD_PRESETS.forEach((a) => {
+    a.rules.forEach((r) => {
+      const nm = a.name + (r[0] === 'all' ? '' : ' (' + r[1] + ' off)');
+      if (db.get('SELECT id FROM ad_creatives WHERE name=?', nm)) return;
+      db.run("INSERT INTO ad_creatives (slot_key,name,scope_type,scope_value,mode,ad_code,fallback_code,image_url,link_url,alt_text,betting_related,priority,active,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'))",
+        a.slot_key, nm, r[0], r[1], r[2], r[2] === 'show' ? a.ad_code : '', '', '', '', '', a.betting_related, a.priority);
+    });
+  });
+}
+
 function install(db) {
+  installAds(db);
   PRESETS.forEach((p) => {
     const exists = db.all('SELECT id,name FROM bookmakers').some((b) => norm(b.name) === norm(p.name));
     if (exists) { if (p.logo_url) db.run("UPDATE bookmakers SET logo_url=? WHERE logo_url='' AND REPLACE(REPLACE(LOWER(name),' ',''),'-','')=?", p.logo_url, norm(p.name)); return; }

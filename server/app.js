@@ -22,7 +22,8 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
   const apiLimit = http.makeLimiter(cfg.apiRatePerMin, 60000);
   const countryList = countries.list();
   const consent = new Set(countries.CONSENT_COUNTRIES);
-  const adminApi = admin.create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches });
+  const analytics = require('./analytics').create(db, cfg);
+  const adminApi = admin.create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches, analytics });
 
   function getBk(cc) {
     let r = bkCache.get(cc);
@@ -93,6 +94,7 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
       hdr['X-Frame-Options'] = null;
       hdr['Content-Security-Policy'] = "frame-ancestors 'self' " + allow.join(' ');
     }
+    if (out.status === 200 && req.method === 'GET' && !(out.page && out.page.embed)) analytics.record(req, url.pathname, g.code, http.clientIp(req, cfg.trustProxy));
     http.send(req, res, out.status, out.html, hdr);
   }
 

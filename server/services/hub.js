@@ -52,7 +52,7 @@ function create({ store, getBk, maxPerIp, log }) {
           const items = ms.map((x) => {
             if (!bk.compliance.betting_allowed) return null;
             const p = odds.primary(rows.get(x.id) || [], bk.items, x.sport);
-            return p ? { id: x.id, bk: p.bookmaker_id, bn: p.bookmaker_name, bs: (bk.items.find((b) => b.id === p.bookmaker_id) || {}).short_code, bc: (bk.items.find((b) => b.id === p.bookmaker_id) || {}).color, cells: p.cells } : { id: x.id, none: 1 };
+            return p ? { id: x.id, bk: p.bookmaker_id, bn: p.bookmaker_name, bs: (bk.items.find((b) => b.id === p.bookmaker_id) || {}).short_code, bc: (bk.items.find((b) => b.id === p.bookmaker_id) || {}).color, bl: (bk.items.find((b) => b.id === p.bookmaker_id) || {}).logo_url || '', cells: p.cells } : { id: x.id, none: 1 };
           }).filter(Boolean);
           if (items.length) list.forEach((c) => write(c, 'o', items));
         });
