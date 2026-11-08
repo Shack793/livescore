@@ -100,7 +100,10 @@ function createMulti(cfg, log) {
       (matches || []).forEach((m) => { const p = sportOf(m); (groups[p.name] = groups[p.name] || { p, list: [] }).list.push(m); });
       const out = [];
       for (const k of Object.keys(groups)) {
-        const r = await groups[k].p.odds({ matches: groups[k].list, live }).catch(() => []);
+        const r = await groups[k].p.odds({ matches: groups[k].list, live }).catch((e) => {
+          if (log) log('odds ' + groups[k].p.name + ' failed: ' + e.message);
+          return [];
+        });
         (r || []).forEach((o) => out.push(o));
       }
       return out;

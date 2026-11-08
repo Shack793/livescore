@@ -228,9 +228,20 @@ function create({ db, provider, cfg, hub, log }) {
   /* ---------- odds ---------- */
   async function odds(onlyLive) {
     const t = nowSec();
-    const rows = db.all("SELECT id,ref,sport,status FROM matches WHERE status IN ('live','halftime','break') OR (? = 0 AND status='scheduled' AND kickoff BETWEEN ? AND ?)",
+    const rows = db.all("SELECT id,ref,sport,status,kickoff FROM matches WHERE status IN ('live','halftime','break') OR (? = 0 AND status='scheduled' AND kickoff BETWEEN ? AND ?)",
       onlyLive ? 1 : 0, t - 3600, t + 2 * DAY);
-    const list = rows.map((r) => states.get(r.ref) || { ref: r.ref, sport: r.sport, status: r.status });
+    // A fixture that the feed has since dropped (cancelled/replaced) is no longer in
+    // states, so fall back to the DB row. Always carry kickoff: odds providers used to
+    // throw on a missing one, which silently wiped the whole sport's odds batch.
+    const list = rows.map((r) => {
+      const s = states.get(r.ref);
+      const m = s ? Object.assign({}, s) : { ref: r.ref, sport: r.sport, status: r.status };
+      if (m.ref == null) m.ref = r.ref;
+      if (m.sport == null) m.sport = r.sport;
+      if (m.status == null) m.status = r.status;
+      if (m.kickoff == null) m.kickoff = r.kickoff;
+      return m;
+    });
     if (!list.length) return;
     const out = await provider.odds({ matches: list, live: !!onlyLive });
     const changed = new Set();
