@@ -202,13 +202,13 @@
   function oddsHtml(it) {
     var f = oddsFmt();
     var chip = /^(https?:\/\/|\/)[^\s"'<>]+$/i.test(it.bl || '') ? '<span class="bkchip logo" title="' + esc(it.bn) + '"><img src="' + esc(it.bl) + '" alt="' + esc(it.bn) + '"></span>' : '<span class="bkchip" style="--c:' + esc(it.bc || '#555') + '" title="' + esc(it.bn) + '">' + esc(it.bs || '') + '</span>';
-    return chip + it.cells.map(function (c) {
+    return chip + (it.age != null ? OTAG : '') + it.cells.map(function (c) {
       return '<a class="odd' + (c.trend ? ' ' + c.trend : '') + '" data-dec="' + c.value + '" data-sel="' + esc(c.sel) + '" href="/go/' + it.bk + '?p=list&m=' + it.id + '" target="_blank" rel="sponsored nofollow noopener">' + esc(fmtOdd(c.value, f)) + '</a>';
     }).join('');
   }
   function patchOdds(row, it) {
     var box = $('.mr-odds', row); if (!box) return;
-    if (it.none) { if (!box.classList.contains('none')) { box.className = 'mr-odds none'; box.innerHTML = $$('.odd', box).map(function () { return '<span class="odd na">–</span>'; }).join(''); row.removeAttribute('data-odds'); } return; }
+    if (it.none) { if (!box.classList.contains('none')) { box.className = 'mr-odds none'; box.innerHTML = '<span class="odds-soon">' + (row.getAttribute('data-st') === 'sch' ? 'Odds soon' : 'No live odds') + '</span>'; delete box.__t; row.removeAttribute('data-odds'); } return; }
     var cur = $$('a.odd', box);
     if (!box.classList.contains('none') && String(box.getAttribute('data-bk')) === String(it.bk) && cur.length === it.cells.length) {
       it.cells.forEach(function (c, i) {
@@ -220,6 +220,26 @@
         }
       });
     } else { box.className = 'mr-odds'; box.setAttribute('data-bk', it.bk); box.innerHTML = oddsHtml(it); row.setAttribute('data-odds', '1'); }
+    stampAge(box, it.age);
+  }
+  // "Pre-match odds" label: once a match is in play, odds that a live pull has not confirmed for 3 minutes are shown as pre-match.
+  var STALE_MS = 180000, OTAG = '<span class="otag" title="These are the odds from before kick-off. They are not updating live and may have changed.">Pre-match</span>';
+  function stampAge(box, age) {
+    if (age == null) { delete box.__t; box.classList.remove('stale'); return; }
+    box.__t = Date.now() - age * 1000; box.classList.toggle('stale', age * 1000 > STALE_MS);
+    if (!$('.otag', box)) { var chip = $('.bkchip', box); if (chip) chip.insertAdjacentHTML('afterend', OTAG); }
+  }
+  function ageTick() {
+    $$('.mrow').forEach(function (row) {
+      var st = row.getAttribute('data-st'), box = $('.mr-odds:not(.none)', row); if (!box) return;
+      if (st !== 'live' && st !== 'ht') { box.classList.remove('stale'); return; }
+      if (box.__t == null) { var a = box.getAttribute('data-age'); box.__t = Date.now() - (a != null && a !== '' ? +a * 1000 : 0); }
+      var stale = Date.now() - box.__t > STALE_MS;
+      if (stale && !$('.otag', box)) { var chip = $('.bkchip', box); if (chip) chip.insertAdjacentHTML('afterend', OTAG); }
+      box.classList.toggle('stale', stale);
+    });
+    var strip = $('.strip[data-age]');
+    if (strip) { if (strip.__t == null) strip.__t = Date.now() - (+strip.getAttribute('data-age')) * 1000; strip.classList.toggle('stale', Date.now() - strip.__t > STALE_MS); }
   }
   var fragTimer = null, fragBusy = false;
   function refreshMatchPage() {
@@ -403,6 +423,7 @@
     if (CFG.page === 'favorites') { paintFavTeams(); checkImport(); loadFavorites(); }
     if (!LSN.preview && 'serviceWorker' in navigator && !swReg) navigator.serviceWorker.register('/sw.js').then(function (r) { swReg = r; }).catch(function () {});
     startStream();
+    if (!LSN.preview) { ageTick(); setInterval(ageTick, 20000); }
   }
   LSN.app = { init: init, afterContent: afterContent, fmtOdd: fmtOdd, getCookie: getCookie, setCookie: setCookie };
   if (!LSN.preview) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init(); }

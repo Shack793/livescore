@@ -98,14 +98,15 @@ function createMulti(cfg, log) {
     async odds({ matches, live }) {
       const groups = {};
       (matches || []).forEach((m) => { const p = sportOf(m); (groups[p.name] = groups[p.name] || { p, list: [] }).list.push(m); });
-      const out = [];
-      for (const k of Object.keys(groups)) {
-        const r = await groups[k].p.odds({ matches: groups[k].list, live }).catch((e) => {
-          if (log) log('odds ' + groups[k].p.name + ' failed: ' + e.message);
-          return [];
-        });
+      const out = [], errs = [], keys = Object.keys(groups);
+      for (const k of keys) {
+        let r = [];
+        try { r = await groups[k].p.odds({ matches: groups[k].list, live }); }
+        catch (e) { errs.push(k + ': ' + e.message); }
         (r || []).forEach((o) => out.push(o));
       }
+      // One sport failing must not hide the others, but a failure must be visible (dashboard + log), not silent.
+      if (errs.length) { log('odds errors: ' + errs.join(' | ')); if (!out.length && errs.length === keys.length) throw new Error(errs.join(' | ').slice(0, 300)); }
       return out;
     }
   };

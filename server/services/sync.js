@@ -228,33 +228,27 @@ function create({ db, provider, cfg, hub, log }) {
   /* ---------- odds ---------- */
   async function odds(onlyLive) {
     const t = nowSec();
-    const rows = db.all("SELECT id,ref,sport,status,kickoff FROM matches WHERE status IN ('live','halftime','break') OR (? = 0 AND status='scheduled' AND kickoff BETWEEN ? AND ?)",
+    const rows = db.all("SELECT id,ref,sport,status FROM matches WHERE status IN ('live','halftime','break') OR (? = 0 AND status='scheduled' AND kickoff BETWEEN ? AND ?)",
       onlyLive ? 1 : 0, t - 3600, t + 2 * DAY);
-    // A fixture that the feed has since dropped (cancelled/replaced) is no longer in
-    // states, so fall back to the DB row. Always carry kickoff: odds providers used to
-    // throw on a missing one, which silently wiped the whole sport's odds batch.
-    const list = rows.map((r) => {
-      const s = states.get(r.ref);
-      const m = s ? Object.assign({}, s) : { ref: r.ref, sport: r.sport, status: r.status };
-      if (m.ref == null) m.ref = r.ref;
-      if (m.sport == null) m.sport = r.sport;
-      if (m.status == null) m.status = r.status;
-      if (m.kickoff == null) m.kickoff = r.kickoff;
-      return m;
-    });
-    if (!list.length) return;
+    const list = rows.map((r) => states.get(r.ref) || { ref: r.ref, sport: r.sport, status: r.status });
+    if (!list.length) { status.oddsInfo = { at: t, live: !!onlyLive, pulled: 0, stored: db.get('SELECT COUNT(*) n FROM odds_current').n, matchesAsked: 0, bySport: {} }; return; }
     const out = await provider.odds({ matches: list, live: !!onlyLive });
-    const changed = new Set();
-    db.tx(() => out.forEach((o) => {
+    const changed = new Set(), seen = new Set();
+    db.tx(() => { out.forEach((o) => {
       const mid = ids.match.get(o.matchRef) || (db.get('SELECT id FROM matches WHERE ref=?', o.matchRef) || {}).id;
       if (!mid || !(o.value > 1)) return;
       const old = db.get('SELECT value FROM odds_current WHERE match_id=? AND bookmaker_ref=? AND market=? AND selection=?', mid, o.bookmaker, o.market, o.selection);
       if (!old) { db.run('INSERT INTO odds_current (match_id,bookmaker_ref,market,selection,value,prev,updated_at) VALUES (?,?,?,?,?,?,?)', mid, o.bookmaker, o.market, o.selection, o.value, null, t); changed.add(mid); }
       else if (old.value !== o.value) { db.run('UPDATE odds_current SET prev=?, value=?, updated_at=? WHERE match_id=? AND bookmaker_ref=? AND market=? AND selection=?', old.value, o.value, t, mid, o.bookmaker, o.market, o.selection); changed.add(mid); }
-    }));
-    log('odds: ' + out.length + ' pulled (' + changed.size + ' changed)');
+    if (onlyLive) seen.add(mid + '|' + o.bookmaker);
+    }); seen.forEach((k) => { const i = k.indexOf('|'); db.run('UPDATE odds_current SET seen_at=? WHERE match_id=? AND bookmaker_ref=?', t, Number(k.slice(0, i)), k.slice(i + 1)); }); });
+    const by = {}; out.forEach((o) => { const k = String(o.matchRef).slice(0, 2); by[k] = (by[k] || 0) + 1; });
+    const stored = db.get('SELECT COUNT(*) n FROM odds_current').n;
+    log('odds: ' + out.length + ' pulled (' + changed.size + ' changed), ' + stored + ' stored');
     status.counts.oddsRows = out.length;
-    if (changed.size && hub && hub.oddsChanged) hub.oddsChanged(Array.from(changed));
+    status.oddsInfo = { at: t, live: !!onlyLive, pulled: out.length, stored: stored, matchesAsked: list.length, bySport: by };
+    // on a live pull also tell viewers which matches were just confirmed, so their "not live" labels clear
+    if (hub && hub.oddsChanged) { const ids = new Set(changed); seen.forEach((k) => ids.add(Number(k.slice(0, k.indexOf('|'))))); if (ids.size) hub.oddsChanged(Array.from(ids)); }
   }
 
   /* ---------- standings (scheduled for top leagues; any other league is fetched on demand when a page needs it) ---------- */

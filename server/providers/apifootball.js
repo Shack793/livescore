@@ -10,6 +10,9 @@
 // until you add adapters for them). Auth header: x-apisports-key. Base: https://v3.football.api-sports.io
 const { slugify } = require('../../shared/util');
 
+// Pre-match odds are paginated per day. Each page is one API call, so this cap
+// keeps the daily quota bounded (see README on the 7,500 calls/day plan).
+const ODDS_MAX_PAGES = 5;
 const STATUS = {
   TBD: 'scheduled', NS: 'scheduled',
   '1H': 'live', '2H': 'live', ET: 'live', BT: 'live', P: 'live', LIVE: 'live',
@@ -34,10 +37,6 @@ module.exports = function createApiFootball(cfg, log) {
   const key = cfg.apiFootballKey;
   const st = { calls: 0, remaining: null, limit: null, lastError: null, lastOk: null };
   const logger = log || { info() {}, warn() {}, error() {} };
-  const oddsOn = cfg.footballOdds !== false;
-  const oddsTtl = Math.max(60, cfg.footballOddsSec || 600) * 1000;
-  const oddsMax = Math.max(1, cfg.footballOddsMax || 60);
-  const oddsCache = new Map(); // fixture id -> { at, rows }
 
   // Serialize calls and leave a gap so a burst (standings backfill, crawlers
   // opening many league pages) can never exceed the per-minute subscription
@@ -212,32 +211,11 @@ module.exports = function createApiFootball(cfg, log) {
       return ((sq && sq.players) || []).map((p) => ({ name: p.name, number: p.number, pos: posMap[p.position] || p.position || '', age: p.age }));
     },
 
-    // Odds are fetched per fixture (?fixture=ID). The date-paged feed lists a whole
-    // day (hundreds of fixtures over ~80 pages), so a small page cap silently missed
-    // most of the matches we show. Each pass now fetches at most
-    // cfg.footballOddsMax uncached fixtures and caches responses for cfg.footballOddsSec.
+    // Pre-match odds come per bookmaker. In-play odds: see the note in README ("Live odds with API-Football").
     async odds({ matches, live }) {
-      if (!oddsOn || lowBudget()) return [];
-      // /odds/live has no bookmaker attribution, so it can never map to a bookmaker
-      // row the site can show. Live fixtures still get odds from the regular pass,
-      // which includes them and refreshes every footballOddsSec seconds.
-      if (live) return [];
-      const wanted = [], seen = new Set();
-      for (const m of matches || []) {
-        const ref = String((m && m.ref) || '');
-        if (ref.indexOf('af:') !== 0 || seen.has(ref)) continue;
-        if (m.sport && m.sport !== 'football') continue;
-        if (m.status === 'finished' || m.status === 'cancelled') continue;
-        const id = ref.slice(3);
-        if (!/^\d+$/.test(id)) continue;
-        const ko = Number(m.kickoff);
-        seen.add(ref);
-        wanted.push({ ref, id, live: /^(live|halftime|break)$/.test(String(m.status || '')), kickoff: isFinite(ko) && ko > 0 ? ko : Infinity });
-      }
-      // Live games first, then the fixtures kicking off soonest, so a capped pass
-      // always refreshes the odds users are most likely to see.
-      wanted.sort((a, b) => (a.live === b.live ? a.kickoff - b.kickoff : (a.live ? -1 : 1)));
-      const add = (acc, matchRef, bk, bets) => {
+      const wanted = new Set((matches || []).map((m) => m.ref));
+      const rows = [];
+      const push = (matchRef, bk, bets) => {
         (bets || []).forEach((bet) => {
           const name = (bet.name || '').toLowerCase();
           (bet.values || []).forEach((v) => {
@@ -246,37 +224,38 @@ module.exports = function createApiFootball(cfg, log) {
             if (name === 'match winner') { market = '1x2'; sel = { Home: '1', Draw: 'X', Away: '2' }[v.value]; }
             else if (name === 'goals over/under' && /2\.5$/.test(String(v.value))) { market = 'ou25'; sel = /^over/i.test(v.value) ? 'O' : 'U'; }
             else if (name === 'both teams score') { market = 'btts'; sel = /^yes/i.test(v.value) ? 'Y' : 'N'; }
-            if (market && sel) acc.push({ matchRef, bookmaker: bk, market, selection: sel, value: odd });
+            if (market && sel) rows.push({ matchRef, bookmaker: bk, market, selection: sel, value: odd });
           });
         });
       };
-      const out = [];
-      let fetched = 0;
-      for (const w of wanted) {
-        const cache = oddsCache.get(w.id);
-        if (cache && Date.now() - cache.at < oddsTtl) { out.push(...cache.rows); continue; }
-        if (fetched >= oddsMax) continue;
-        fetched++;
-        try {
-          const r = await call('/odds', { fixture: w.id });
-          const rows = [];
+      if (live) {
+        if (lowBudget()) return [];
+        const r = await call('/odds/live');
+        (r.response || []).forEach((o) => {
+          const ref = 'af:' + (o.fixture && o.fixture.id);
+          if (!wanted.has(ref)) return;
+          if (Array.isArray(o.bookmakers) && o.bookmakers.length) o.bookmakers.forEach((b) => push(ref, 'af:b' + b.id, b.bets));
+          else push(ref, 'af:live', (o.odds || []).map((b) => ({ name: b.name, values: b.values })));
+        });
+        return rows;
+      }
+      // Only fixtures with a real kickoff can be grouped by day. A fixture that dropped
+      // out of the feed arrives without one, and must not crash the whole odds pass.
+      const days = {}; (matches || []).forEach((m) => { const ko = Number(m.kickoff); if (isFinite(ko) && ko > 0) days[ymd(ko)] = 1; });
+      for (const day of Object.keys(days)) {
+        if (lowBudget()) break;
+        let page = 1, total = 1;
+        while (page <= total && page <= ODDS_MAX_PAGES) {
+          const r = await call('/odds', { date: day, page: String(page) });
+          total = (r.paging && r.paging.total) || 1;
           (r.response || []).forEach((o) => {
             const ref = 'af:' + (o.fixture && o.fixture.id);
-            if (ref !== w.ref) return;
-            (o.bookmakers || []).forEach((b) => add(rows, ref, 'af:b' + b.id, b.bets));
+            if (wanted.has(ref)) (o.bookmakers || []).forEach((b) => push(ref, 'af:b' + b.id, b.bets));
           });
-          oddsCache.set(w.id, { at: Date.now(), rows });
-          out.push(...rows);
-        } catch (e) {
-          if (/quota|limit|requests/i.test(e.message)) break;
-          logger('odds af ' + w.id + ': ' + e.message);
+          page++;
         }
       }
-      if (oddsCache.size > 500) {
-        const keep = Date.now() - oddsTtl;
-        for (const [id, v] of oddsCache) if (v.at < keep) oddsCache.delete(id);
-      }
-      return out;
+      return rows;
     }
   };
 };

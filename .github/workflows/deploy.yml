@@ -94,20 +94,12 @@ jobs:
             sudo /usr/bin/chown -R root:lsn "$APP/server" "$APP/shared" "$APP/public" "$APP/scripts" "$APP/deploy" "$APP/package.json" 2>/dev/null || true
             sudo /usr/bin/chown root:lsn "$APP/.env"; sudo /usr/bin/chmod 640 "$APP/.env"
             sudo /usr/bin/chown -R lsn:lsn "$APP/data" "$APP/backups" 2>/dev/null || true
-            PORT="$(sudo -n /usr/bin/bash -c "grep -m1 '^PORT=' '$APP/.env' | cut -d= -f2 | tr -dc 0-9" || true)"; PORT="${PORT:-3100}"
+            PORT="$(grep '^PORT=' "$APP/.env" 2>/dev/null | head -1 | cut -d= -f2 | tr -dc 0-9 || true)"; PORT="${PORT:-3100}"
             sudo /usr/bin/systemctl restart livescorenow
+            sleep 4
+            sudo /usr/bin/systemctl status livescorenow --no-pager || true
             sudo /usr/sbin/nginx -t
             sudo /usr/bin/systemctl reload nginx
-            HEALTH=0
-            for i in $(seq 1 30); do
-              if curl -fsS "http://127.0.0.1:${PORT}/" -o /dev/null 2>/dev/null; then HEALTH=1; echo "Health OK on 127.0.0.1:${PORT} after ${i}s"; break; fi
-              sleep 1
-            done
-            sudo /usr/bin/systemctl status livescorenow --no-pager || true
-            if [ "$HEALTH" != "1" ]; then
-              echo "Health check FAILED on 127.0.0.1:${PORT}"
-              sudo -n /usr/bin/bash -c 'journalctl -u livescorenow -n 40 --no-pager' || true
-              exit 1
-            fi
+            curl -fsS "http://127.0.0.1:${PORT}/" -o /dev/null && echo "Health OK on 127.0.0.1:${PORT}" || (journalctl -u livescorenow -n 30 --no-pager || true; exit 1)
             echo "Deployed ${GITHUB_SHA:-unknown} at $STAMP"
             echo "Pitchside untouched:"; curl -s -o /dev/null -w "pitchside local HTTP %{http_code}\n" http://127.0.0.1/ || true

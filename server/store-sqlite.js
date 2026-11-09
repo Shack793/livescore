@@ -125,7 +125,7 @@ function create(db) {
       if (!ids.length) return out;
       for (let i = 0; i < ids.length; i += 400) {
         const chunk = ids.slice(i, i + 400);
-        db.all('SELECT match_id,bookmaker_ref,market,selection,value,prev FROM odds_current WHERE match_id IN (' + chunk.map(() => '?').join(',') + ')', ...chunk)
+        db.all('SELECT match_id,bookmaker_ref,market,selection,value,prev,seen_at FROM odds_current WHERE match_id IN (' + chunk.map(() => '?').join(',') + ')', ...chunk)
           .forEach((r) => { let a = out.get(r.match_id); if (!a) out.set(r.match_id, a = []); a.push(r); });
       }
       return out;

@@ -25,16 +25,9 @@ test('preset: 1xBet banner shows in the in-feed slot except GB/FR/US', async () 
   const dbFile = path.join(os.tmpdir(), 'lsn-prea-' + process.pid + '-' + Date.now() + '.db');
   const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: dbFile, SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
   try {
-    const page = async (cc, date) => (await fetch('http://127.0.0.1:' + S.port + '/?cc=' + cc + (date ? '&date=' + date : ''))).text();
-    // The in-feed slot only renders once the day has at least four league groups, so pick a date that has them.
-    let gh = '', date = '';
-    for (let i = 0; i < 14 && !gh; i++) {
-      const d = new Date(Date.now() + i * 86400000).toISOString().slice(0, 10);
-      const h = await page('GH', d);
-      if (h.includes('data-slot="infeed"')) { gh = h; date = d; }
-    }
-    assert.ok(gh && gh.includes('refbanners.com/I?tag=d_6306719m_2811c_'), 'shown in Ghana');
-    for (const cc of ['GB', 'FR', 'US']) assert.ok(!(await page(cc, date)).includes('refbanners.com'), 'hidden in ' + cc);
+    const page = async (cc) => (await fetch('http://127.0.0.1:' + S.port + '/?cc=' + cc)).text();
+    assert.ok((await page('GH')).includes('refbanners.com/I?tag=d_6306719m_2811c_'), 'shown in Ghana');
+    for (const cc of ['GB', 'FR', 'US']) assert.ok(!(await page(cc)).includes('refbanners.com'), 'hidden in ' + cc);
   } finally { await S.close(); }
 });
 

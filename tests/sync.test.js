@@ -164,27 +164,6 @@ test('sports without a configured feed are hidden from navigation', async () => 
   assert.strictEqual(db.get("SELECT active FROM sports WHERE id='basketball'").active, 0);
 });
 
-test('odds fallback from the DB includes kickoff for fixtures missing from the live feed', async () => {
-  const { db, cfg, sync } = setup();
-  await sync.start();
-  const now = Math.floor(Date.now() / 1000);
-  const m = db.get("SELECT id FROM matches WHERE sport='football' LIMIT 1");
-  db.run("UPDATE matches SET status='scheduled', kickoff=? WHERE id=?", now + 3600, m.id);
-  let seen = null;
-  const fake = {
-    name: 'apifootball', isMock: false, sports: ['football'],
-    referenceData: async () => ({ countries: [], leagues: [], teams: [] }),
-    feedBookmakers: async () => [], fixtures: async () => [], live: async () => [], standings: async () => [],
-    odds: async ({ matches }) => { seen = matches; return []; }
-  };
-  // No start()/fixtures(): states is empty, so every candidate uses the DB fallback.
-  const s = syncMod.create({ db, provider: fake, cfg, hub: null, log: () => {} });
-  await s.odds(false);
-  assert.ok(seen && seen.length > 0);
-  assert.ok(seen.every((x) => Number.isFinite(x.kickoff)), 'every fallback match carries kickoff');
-  assert.ok(seen.every((x) => x.ref && x.sport));
-});
-
 test('switching from demo to a real provider purges simulated data and demo bookmakers (keeps custom ones)', async () => {
   const { db, sync, cfg } = setup();
   await sync.start();

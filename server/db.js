@@ -110,6 +110,7 @@ function open(file) {
   const raw = new DatabaseSync(file);
   raw.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;');
   raw.exec(SCHEMA);
+  try { raw.exec('ALTER TABLE odds_current ADD COLUMN seen_at INTEGER'); } catch (e) { /* column already there */ }
 
   const cache = new Map();
   const stmt = (sql) => { let s = cache.get(sql); if (!s) { s = raw.prepare(sql); cache.set(sql, s); } return s; };

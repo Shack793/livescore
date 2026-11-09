@@ -91,7 +91,9 @@
     }).join('');
   }
 
+  var lastCrumbs = null; // remembered so the page head can also carry BreadcrumbList data for search engines
   function crumbs(list) {
+    lastCrumbs = list;
     return '<nav class="crumbs">' + list.map(function (c, i) { return c.href ? '<a href="' + c.href + '">' + E(c.label) + '</a>' : '<span>' + E(c.label) + '</span>'; }).join('<i>›</i>') + '</nav>';
   }
 
@@ -131,7 +133,7 @@
       kind: 'sport', title: s.name + ' Live Scores, Results & Odds', canonical: date === today ? base : base + '?date=' + date,
       description: 'Live ' + s.name.toLowerCase() + ' scores, fixtures, results, standings and odds comparison. Updated in real time.',
       html: html, noindex: date !== today,
-      jsonld: sport === 'football' && date === today ? { '@context': 'https://schema.org', '@type': 'WebSite', name: ctx.siteName, url: ctx.siteUrl, potentialAction: { '@type': 'SearchAction', target: ctx.siteUrl + '/search/?q={q}', 'query-input': 'required name=q' } } : null
+      jsonld: sport === 'football' && date === today ? { '@context': 'https://schema.org', '@type': 'WebSite', name: ctx.siteName, url: ctx.siteUrl, publisher: { '@type': 'Organization', name: ctx.siteName, url: ctx.siteUrl, logo: ctx.siteUrl + '/assets/icon-512.png' }, potentialAction: { '@type': 'SearchAction', target: ctx.siteUrl + '/search/?q={q}', 'query-input': 'required name=q' } } : null
     };
   }
 
@@ -295,8 +297,10 @@
     if (!p || m.status === 'finished') return '';
     var labels = (O.MAIN_MARKET[m.sport] || O.MAIN_MARKET.football).labels;
     var bk = ctx.bk.items.filter(function (b) { return b.id === p.bookmaker_id; })[0];
-    return '<div class="strip">' + V.bkChip(bk) + '<div class="strip-t"><b>' + E(p.bookmaker_name) + '</b><span>' + E(bk.offer || '') + '</span></div><div class="strip-o">' +
-      p.cells.map(function (c, i) { return '<div><small>' + E(labels[i]) + '</small>' + V.oddCell(c, p.bookmaker_id, m.id, ctx, 'match-strip') + '</div>'; }).join('') + '</div>' + V.cta(bk, m.id, 'match-strip', 'Bet now') + '</div>';
+    var age = O.liveAge(m, p, ctx.now), stale = age != null && age > O.STALE_SEC;
+    return '<div class="strip' + (stale ? ' stale' : '') + '"' + (age != null ? ' data-age="' + age + '"' : '') + '>' + V.bkChip(bk) + '<div class="strip-t"><b>' + E(p.bookmaker_name) + '</b><span>' + E(bk.offer || '') + '</span></div><div class="strip-o">' +
+      p.cells.map(function (c, i) { return '<div><small>' + E(labels[i]) + '</small>' + V.oddCell(c, p.bookmaker_id, m.id, ctx, 'match-strip') + '</div>'; }).join('') + '</div>' + V.cta(bk, m.id, 'match-strip', 'Bet now') +
+      (age != null ? '<div class="strip-note">These are <b>pre-match odds</b>. They are not updating live since kick-off and may have changed &ndash; check ' + E(p.bookmaker_name) + ' for the current price.</div>' : '') + '</div>';
   }
 
   function pageMatch(ctx, store, slug, id, query) {
@@ -316,10 +320,10 @@
       '<div id="mwrap">' + matchHeader(ctx, m, d) + (ctx.forumUrl ? '<a class="discuss" href="' + E(V.forumMatchLink(ctx, m)) + '">💬 Discuss this match on ' + E(ctx.forumName) + ' ›</a>' : '') + matchOddsStrip(ctx, m, rows) + V.adSlot(ctx, 'match-strip', m.id) + '<div id="mbody">' + body + '</div></div>';
     var score = V.hasScore(m) ? ' ' + m.hs + '-' + m.as : '';
     return {
-      kind: 'match', matchId: m.id, title: m.home.name + ' vs ' + m.away.name + score + ' – Live Score, Lineups & Odds',
+      kind: 'match', matchId: m.id, title: m.home.name + ' vs ' + m.away.name + score + ' – Live Score & Odds',
       description: m.home.name + ' vs ' + m.away.name + ' (' + m.league.name + '): live score, events, statistics, line-ups, head-to-head' + (ctx.bettingOn ? ' and odds comparison' : '') + '.',
       html: html,
-      jsonld: { '@context': 'https://schema.org', '@type': 'SportsEvent', name: m.home.name + ' vs ' + m.away.name, startDate: new Date(m.kickoff * 1000).toISOString(), sport: sportName(m.sport),
+      jsonld: { '@context': 'https://schema.org', '@type': 'SportsEvent', name: m.home.name + ' vs ' + m.away.name, url: ctx.siteUrl + V.matchUrl(m), startDate: new Date(m.kickoff * 1000).toISOString(), sport: sportName(m.sport),
         homeTeam: { '@type': 'SportsTeam', name: m.home.name }, awayTeam: { '@type': 'SportsTeam', name: m.away.name }, eventStatus: m.status === 'postponed' ? 'https://schema.org/EventPostponed' : 'https://schema.org/EventScheduled' }
     };
   }
@@ -403,6 +407,7 @@
 
   // inp: { path, query, cookies, cc, countryName, now, cfg, needConsent }
   function handle(store, inp) {
+    lastCrumbs = null;
     var ctx = makeCtx(store, inp), p = inp.path.replace(/\/{2,}/g, '/'), q = inp.query || {};
     var parts = p.split('/').filter(Boolean), page = null, status = 200, r;
     var sports = ctx.sports.map(function (s) { return s.id; });
@@ -424,6 +429,7 @@
     if (page && page.redirect) return { ctx: ctx, redirect: page.redirect, status: 301 };
     if (page && page.fragment != null) return { ctx: ctx, status: 200, fragment: page.fragment };
     if (!page) { r = notFound(ctx, store); page = r.page; status = r.status; }
+    else if (lastCrumbs && !page.crumbs) page.crumbs = lastCrumbs;
     return { ctx: ctx, status: status, page: page, html: V.document(ctx, page) };
   }
 

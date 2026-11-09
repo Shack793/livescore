@@ -83,12 +83,6 @@ function load(root, overrides) {
     apiSportsOddsMax: num(e.API_SPORTS_ODDS_MAX, 6),
     apiFootballKey: e.API_FOOTBALL_KEY || '',
     apiFootballBase: e.API_FOOTBALL_BASE || 'https://v3.football.api-sports.io',
-    // Odds are fetched one fixture at a time (?fixture=ID), so each sync pass
-    // is capped and responses are cached for a TTL. This keeps the daily quota
-    // bounded even though a day has hundreds of fixtures.
-    footballOdds: bool(e.FOOTBALL_ODDS, true),
-    footballOddsSec: num(e.FOOTBALL_ODDS_SEC, 600),
-    footballOddsMax: num(e.FOOTBALL_ODDS_MAX, 60),
     mockRealtime: bool(e.MOCK_REALTIME, false),
     defaultCountry: (e.DEFAULT_COUNTRY || '').toUpperCase(),
     // Only true when running behind your own nginx/Cloudflare: lets us trust X-Forwarded-For and CF-IPCountry.

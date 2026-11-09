@@ -80,14 +80,16 @@
     return '<span class="mr-score"><span class="sc"><b class="sh">' + m.hs + '</b><b class="sa">' + m.as + '</b></span><span class="mr-per">' + perHtml(m) + '</span></span>';
   }
 
+  var OTAG = '<span class="otag" title="These are the odds from before kick-off. They are not updating live and may have changed.">Pre-match</span>';
   function matchRow(m, ctx, prim) {
     var st = statusOf(m, ctx.tz), cfg = O.MAIN_MARKET[m.sport] || O.MAIN_MARKET.football, odds = '';
     if (ctx.bettingOn) {
       if (prim && m.status !== 'finished') {
-        odds = '<span class="mr-odds" data-bk="' + prim.bookmaker_id + '">' + bkChip({ short_code: shortOf(ctx, prim.bookmaker_id), name: prim.bookmaker_name, color: colorOf(ctx, prim.bookmaker_id), logo_url: logoOf(ctx, prim.bookmaker_id) }) +
+        var age = O.liveAge(m, prim, ctx.now), stale = age != null && age > O.STALE_SEC;
+        odds = '<span class="mr-odds' + (stale ? ' stale' : '') + '" data-bk="' + prim.bookmaker_id + '"' + (age != null ? ' data-age="' + age + '"' : '') + '>' + bkChip({ short_code: shortOf(ctx, prim.bookmaker_id), name: prim.bookmaker_name, color: colorOf(ctx, prim.bookmaker_id), logo_url: logoOf(ctx, prim.bookmaker_id) }) + (age != null ? OTAG : '') +
           prim.cells.map(function (c) { return oddCell(c, prim.bookmaker_id, m.id, ctx); }).join('') + '</span>';
       } else {
-        odds = '<span class="mr-odds none">' + cfg.sels.map(function () { return '<span class="odd na">–</span>'; }).join('') + '</span>';
+        odds = '<span class="mr-odds none"><span class="odds-soon">' + (LIVE[m.status] ? 'No live odds' : 'Odds soon') + '</span></span>';
       }
     }
     return '<div class="mrow s-' + stKey(m) + '" id="m' + m.id + '" data-id="' + m.id + '" data-st="' + stKey(m) + '" data-h="' + m.home.id + '" data-a="' + m.away.id + '" data-lg="' + m.league.id + '" data-sport="' + m.sport + '" data-ko="' + m.kickoff + '"' + (odds && prim && m.status !== 'finished' ? ' data-odds="1"' : '') + '>' +
@@ -356,6 +358,20 @@
       '<script>window.LSN_CFG=' + JSON.stringify(pageConfig(ctx, page)).replace(/</g, '\\u003c') + ';</script><script src="/assets/app.js?v=' + E(ctx.assetV) + '" defer></script></body></html>';
   }
 
+  // JSON-LD for search engines: the page's own data (match, website) plus the breadcrumb trail shown on the page.
+  function ldBlocks(ctx, page, canon) {
+    var out = [];
+    if (page.jsonld) out.push(page.jsonld);
+    if (page.crumbs && page.crumbs.length > 1) {
+      out.push({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: page.crumbs.map(function (c, i) {
+        var it = { '@type': 'ListItem', position: i + 1, name: c.label };
+        it.item = c.href ? ctx.siteUrl + c.href : canon;
+        return it;
+      }) });
+    }
+    return out.map(function (j) { return '<script type="application/ld+json">' + JSON.stringify(j).replace(/</g, '\\u003c') + '</script>'; }).join('');
+  }
+
   function document_(ctx, page) {
     if (page.embed) return embedDoc(ctx, page);
     var title = page.title ? page.title + ' | ' + ctx.siteName : ctx.siteName + ' – ' + ctx.tagline;
@@ -364,11 +380,11 @@
       '<title>' + E(title) + '</title><meta name="description" content="' + E(page.description || ctx.tagline) + '">' +
       (page.noindex ? '<meta name="robots" content="noindex,follow">' : '') +
       '<link rel="canonical" href="' + E(canon) + '"><meta name="theme-color" content="#0b1f33">' +
-      '<meta property="og:title" content="' + E(title) + '"><meta property="og:description" content="' + E(page.description || ctx.tagline) + '"><meta property="og:type" content="website"><meta property="og:site_name" content="' + E(ctx.siteName) + '">' +
+      '<meta property="og:title" content="' + E(title) + '"><meta property="og:description" content="' + E(page.description || ctx.tagline) + '"><meta property="og:type" content="website"><meta property="og:url" content="' + E(canon) + '"><meta property="og:site_name" content="' + E(ctx.siteName) + '">' +
       '<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png"><link rel="alternate icon" href="/assets/favicon.ico" sizes="any"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><meta property="og:image" content="' + E(ctx.siteUrl) + '/assets/og-image.png"><meta name="twitter:card" content="summary_large_image">' +
       '<script>document.documentElement.className="js";</script>' +
       '<link rel="stylesheet" href="/assets/style.css?v=' + E(ctx.assetV) + '">' +
-      (page.jsonld ? '<script type="application/ld+json">' + JSON.stringify(page.jsonld).replace(/</g, '\\u003c') + '</script>' : '') +
+      ldBlocks(ctx, page, canon) +
       '</head><body>' + shell(ctx, page) +
       '<script>window.LSN_CFG=' + JSON.stringify(pageConfig(ctx, page)).replace(/</g, '\\u003c') + ';</script>' +
       '<script src="/assets/app.js?v=' + E(ctx.assetV) + '" defer></script></body></html>';

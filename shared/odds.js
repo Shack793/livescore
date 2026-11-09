@@ -33,7 +33,7 @@
     (rows || []).forEach(function (r) {
       var b = idx[r.bookmaker_ref] || (idx[r.bookmaker_ref] = {});
       var m = b[r.market] || (b[r.market] = {});
-      m[r.selection] = { value: Number(r.value), prev: r.prev == null ? null : Number(r.prev) };
+      m[r.selection] = { value: Number(r.value), prev: r.prev == null ? null : Number(r.prev), seen: r.seen_at === undefined ? undefined : Number(r.seen_at || 0) };
     });
     return idx;
   }
@@ -58,6 +58,7 @@
       if (!ok) continue;
       return {
         bookmaker_id: b.id, bookmaker_name: b.name, market: cfg.market,
+        seen: cfg.sels.reduce(function (a, s) { var v = m[s].seen; return v === undefined ? a : Math.max(a == null ? 0 : a, v); }, null),
         cells: cfg.sels.map(function (s) {
           var c = m[s];
           var trend = c.prev == null || c.prev === c.value ? '' : (c.value > c.prev ? 'up' : 'down');
@@ -92,5 +93,12 @@
     return out;
   }
 
-  return { MAIN_MARKET: MAIN_MARKET, MARKET_TITLES: MARKET_TITLES, MARKET_SELS: MARKET_SELS, index: index, primary: primary, comparison: comparison };
+  // Are these odds live? Only matters once a match has started: before kick-off odds are pre-match by nature.
+  // "seen" is the last time a LIVE odds pull confirmed the price. Returns seconds since then (99999 = never), or null when it does not apply.
+  var STALE_SEC = 180, IN_PLAY = { live: 1, halftime: 1, 'break': 1 };
+  function liveAge(match, prim, now) {
+    if (!prim || !IN_PLAY[match.status] || prim.seen == null) return null; // null seen = data source does not track it (demo)
+    return prim.seen ? Math.max(0, Math.min(99999, now - prim.seen)) : 99999;
+  }
+  return { STALE_SEC: STALE_SEC, liveAge: liveAge, MAIN_MARKET: MAIN_MARKET, MARKET_TITLES: MARKET_TITLES, MARKET_SELS: MARKET_SELS, index: index, primary: primary, comparison: comparison };
 });

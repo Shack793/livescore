@@ -20,10 +20,7 @@ function useFetch(t, handler) {
 
 const cfg = (extra) => Object.assign({
   apiFootballKey: 'test-key',
-  apiFootballBase: 'https://af.test',
-  footballOdds: true,
-  footballOddsSec: 600,
-  footballOddsMax: 10
+  apiFootballBase: 'https://af.test'
 }, extra || {});
 
 const BOOKMAKERS = [{
@@ -35,25 +32,31 @@ const BOOKMAKERS = [{
   ]
 }];
 
-const oddsBody = (id) => ({ results: 1, errors: [], response: [{ fixture: { id: Number(id) }, bookmakers: BOOKMAKERS }] });
+const oddsBody = (id, paging) => ({ results: 1, errors: [], paging: paging || { current: 1, total: 1 }, response: [{ fixture: { id: Number(id) }, bookmakers: BOOKMAKERS }] });
+const kickoffOn = (day, hour) => Date.UTC(2026, 10, day, hour || 12) / 1000; // 2026-11-XX
 
-test('per-fixture odds are fetched even when kickoff is missing (no RangeError)', async (t) => {
-  const seen = [];
+test('pre-match odds are fetched once per day and mapped to bookmaker markets', async (t) => {
+  const urls = [];
   useFetch(t, async (url) => {
     const u = new URL(String(url));
-    assert.ok(u.pathname.endsWith('/odds'), 'uses the per-fixture odds endpoint');
-    seen.push(u.searchParams.get('fixture'));
-    return reply(oddsBody(u.searchParams.get('fixture')));
+    urls.push(u);
+    return reply({ results: 2, errors: [], paging: { current: 1, total: 1 }, response: [
+      { fixture: { id: 101 }, bookmakers: BOOKMAKERS },
+      { fixture: { id: 102 }, bookmakers: BOOKMAKERS }
+    ] });
   });
   const p = createApiFootball(cfg(), () => {});
   const rows = await p.odds({
     matches: [
-      { ref: 'af:101', sport: 'football', status: 'scheduled' },
-      { ref: 'af:102', sport: 'football', status: 'live' }
+      { ref: 'af:101', sport: 'football', status: 'scheduled', kickoff: kickoffOn(9) },
+      { ref: 'af:102', sport: 'football', status: 'scheduled', kickoff: kickoffOn(9, 18) }
     ],
     live: false
   });
-  assert.deepStrictEqual(seen.sort(), ['101', '102']);
+  assert.strictEqual(urls.length, 1, 'one call for the single day');
+  assert.ok(urls[0].pathname.endsWith('/odds'), 'uses the date-paged odds endpoint');
+  assert.strictEqual(urls[0].searchParams.get('date'), '2026-11-09');
+  assert.strictEqual(urls[0].searchParams.get('page'), '1');
   assert.strictEqual(new Set(rows.map((r) => r.matchRef)).size, 2);
   const one = rows.filter((r) => r.matchRef === 'af:101');
   assert.ok(one.some((r) => r.market === '1x2' && r.selection === '1' && r.value === 1.8));
@@ -62,43 +65,56 @@ test('per-fixture odds are fetched even when kickoff is missing (no RangeError)'
   assert.strictEqual(one[0].bookmaker, 'af:b4');
 });
 
-test('odds cache avoids refetching and a capped pass covers the rest next time', async (t) => {
+test('odds pagination is capped per day', async (t) => {
   let calls = 0;
   useFetch(t, async (url) => {
     calls++;
-    return reply(oddsBody(new URL(String(url)).searchParams.get('fixture')));
+    const u = new URL(String(url));
+    const page = Number(u.searchParams.get('page'));
+    return reply({ results: 1, errors: [], paging: { current: page, total: 10 }, response: [{ fixture: { id: 201 }, bookmakers: BOOKMAKERS }] });
   });
-  const p = createApiFootball(cfg({ footballOddsMax: 2 }), () => {});
-  const matches = ['201', '202', '203', '204'].map((id) => ({ ref: 'af:' + id, sport: 'football', status: 'scheduled', kickoff: 1794337200 + Number(id) }));
-
-  const first = await p.odds({ matches, live: false });
-  assert.strictEqual(calls, 2, 'cap respected');
-  assert.strictEqual(new Set(first.map((r) => r.matchRef)).size, 2);
-
-  const second = await p.odds({ matches, live: false });
-  assert.strictEqual(calls, 4, 'cached refs are free; only the two uncached are fetched');
-  assert.strictEqual(new Set(second.map((r) => r.matchRef)).size, 4);
-
-  const third = await p.odds({ matches, live: false });
-  assert.strictEqual(calls, 4, 'everything is served from cache');
-  assert.strictEqual(new Set(third.map((r) => r.matchRef)).size, 4);
+  const p = createApiFootball(cfg(), () => {});
+  const rows = await p.odds({ matches: [{ ref: 'af:201', sport: 'football', status: 'scheduled', kickoff: kickoffOn(10) }], live: false });
+  assert.strictEqual(calls, 5, 'stops at ODDS_MAX_PAGES');
+  assert.strictEqual(new Set(rows.map((r) => r.matchRef)).size, 1);
 });
 
-test('odds ignore other feeds and finished matches; live pass makes no calls', async (t) => {
-  let calls = 0;
-  useFetch(t, async () => { calls++; return reply({ results: 0, errors: [], response: [] }); });
+test('live odds come from /odds/live and ignore fixtures we did not ask for', async (t) => {
+  const paths = [];
+  useFetch(t, async (url) => {
+    const u = new URL(String(url));
+    paths.push(u.pathname);
+    return reply({ results: 3, errors: [], response: [
+      { fixture: { id: 302 }, bookmakers: BOOKMAKERS },
+      { fixture: { id: 999 }, bookmakers: BOOKMAKERS },
+      { fixture: { id: 303 }, odds: [{ name: 'Match Winner', values: [{ value: 'Home', odd: '2.00' }] }] }
+    ] });
+  });
   const p = createApiFootball(cfg(), () => {});
   const rows = await p.odds({
     matches: [
-      { ref: 'hk:1', sport: 'hockey' },
-      { ref: 'af:301', sport: 'football', status: 'finished' },
-      { ref: 'af:302', sport: 'football', status: 'scheduled' }
+      { ref: 'af:302', sport: 'football', status: 'live', kickoff: kickoffOn(9) },
+      { ref: 'af:303', sport: 'football', status: 'live', kickoff: kickoffOn(9) }
+    ],
+    live: true
+  });
+  assert.deepStrictEqual(paths, ['/odds/live']);
+  assert.ok(rows.some((r) => r.matchRef === 'af:302' && r.bookmaker === 'af:b4'));
+  assert.ok(rows.some((r) => r.matchRef === 'af:303' && r.bookmaker === 'af:live'));
+  assert.ok(!rows.some((r) => r.matchRef === 'af:999'), 'unrequested fixture is ignored');
+});
+
+test('a fixture without a kickoff is skipped without a RangeError', async (t) => {
+  let calls = 0;
+  useFetch(t, async () => { calls++; return reply({ results: 0, errors: [], paging: { total: 1 }, response: [] }); });
+  const p = createApiFootball(cfg(), () => {});
+  const rows = await p.odds({
+    matches: [
+      { ref: 'af:401', sport: 'football', status: 'live' },
+      { ref: 'hk:1', sport: 'hockey' }
     ],
     live: false
   });
-  assert.strictEqual(calls, 1);
   assert.deepStrictEqual(rows, []);
-  const liveRows = await p.odds({ matches: [{ ref: 'af:302', sport: 'football', status: 'live' }], live: true });
-  assert.deepStrictEqual(liveRows, []);
-  assert.strictEqual(calls, 1, 'live pass does not spend API calls');
+  assert.strictEqual(calls, 0, 'nothing to group by day, so no call is spent');
 });
