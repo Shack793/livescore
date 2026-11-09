@@ -41,3 +41,26 @@ test('logo also shows next to the odds in match rows', async () => {
     assert.ok(m && m[0].includes('<span class="bkchip logo"') && m[0].includes('/assets/logos/1xbet.png'), 'odds row shows the logo');
   } finally { await S.close(); }
 });
+
+test('preset: full block list applied once to an existing install, and admin removals stay removed', async () => {
+  const dbFile = path.join(os.tmpdir(), 'lsn-prev-' + process.pid + '-' + Date.now() + '.db');
+  const env = { PORT: '0', DB_PATH: dbFile, SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' };
+  let S = await start({ log: () => {}, env });
+  const want = ['AU', 'CW', 'FR', 'NL', 'ES', 'US', 'GB', 'AW', 'BQ', 'AL', 'AM', 'CL', 'CO', 'HR', 'CY', 'CZ', 'EE', 'GI', 'GR', 'IT', 'LV', 'LT', 'MT', 'MD', 'MK', 'PL', 'RO', 'UY'];
+  try {
+    const b = S.db.get("SELECT id FROM bookmakers WHERE name='1xBet'");
+    const blocked = () => S.db.all("SELECT scope_value v FROM bookmaker_geo WHERE bookmaker_id=? AND mode='block'", b.id).map((r) => r.v).sort();
+    assert.deepStrictEqual(blocked(), want.slice().sort());
+    // an older install: only 3 countries, version marker missing
+    S.db.run("DELETE FROM bookmaker_geo WHERE bookmaker_id=? AND scope_value NOT IN ('GB','FR','US') AND mode='block'", b.id);
+    S.db.run("DELETE FROM settings WHERE key LIKE 'preset_%'");
+    require('../server/presets').install(S.db);
+    assert.deepStrictEqual(blocked(), want.slice().sort(), 'missing countries added');
+    // the owner removes one in the admin; a restart must not bring it back
+    S.db.run("DELETE FROM bookmaker_geo WHERE bookmaker_id=? AND scope_value='CZ'", b.id);
+    require('../server/presets').install(S.db);
+    assert.ok(!blocked().includes('CZ'), 'admin removal is respected');
+    const nl = await (await fetch('http://127.0.0.1:' + S.port + '/?cc=NL')).text();
+    assert.ok(!nl.includes('refbanners.com'), 'banner hidden in the Netherlands');
+  } finally { await S.close(); }
+});
