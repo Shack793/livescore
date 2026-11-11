@@ -126,7 +126,7 @@ test('ADMIN: needs auth, CSRF header, and rule changes take effect immediately',
   assert.strictEqual((await get('/admin/api/bookmakers')).status, 401);
   assert.strictEqual((await get('/admin/api/bookmakers', { headers: { authorization: 'Basic ' + Buffer.from('admin:wrong').toString('base64') } })).status, 401);
   const list = JSON.parse((await get('/admin/api/bookmakers', { headers: { authorization: AUTH } })).text);
-  assert.strictEqual(list.length, 6);
+  assert.strictEqual(list.length, 8);
   const bw = list.find((b) => b.name === 'BetWave');
   // POST without the custom header is refused
   const noHdr = await get('/admin/api/bookmakers/' + bw.id, { method: 'PUT', headers: { authorization: AUTH, 'content-type': 'application/json' }, body: JSON.stringify(bw) });

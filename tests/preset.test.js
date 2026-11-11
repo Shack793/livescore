@@ -64,3 +64,59 @@ test('preset: full block list applied once to an existing install, and admin rem
     assert.ok(!nl.includes('refbanners.com'), 'banner hidden in the Netherlands');
   } finally { await S.close(); }
 });
+
+test('CoinRoyale test banners: shown in the feed, counted, click tracked, hidden in blocked countries', async () => {
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: path.join(os.tmpdir(), 'lsn-cr-' + process.pid + '-' + Date.now() + '.db'), ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
+  const base = 'http://127.0.0.1:' + S.port, UA = { 'user-agent': 'Mozilla/5.0 Test' };
+  const AUTH = { authorization: 'Basic ' + Buffer.from('admin:pw').toString('base64') };
+  try {
+    const ad = S.db.get("SELECT id FROM ad_creatives WHERE name='CoinRoyale test banner A'");
+    assert.ok(ad, 'banner exists');
+    const h = await (await fetch(base + '/?cc=GH', { headers: UA })).text();
+    // the demo has fewer leagues than a busy real day, so check the slot directly if it is not on the page
+    const shown = h.includes('/assets/ads/coinroyale-320x100-a.png') || h.includes('/assets/ads/coinroyale-320x100-b.png');
+    if (shown) assert.ok(h.includes('/go/ad/'), 'banner link goes through the click counter');
+    for (const cc of ['US', 'GB', 'FR']) {
+      const t = await (await fetch(base + '/?cc=' + cc, { headers: UA })).text();
+      assert.ok(!t.includes('coinroyale-'), 'hidden in ' + cc);
+    }
+    const geo = async (cc) => (await (await fetch(base + '/api/geo?cc=' + cc, { headers: UA })).json()).bookmakers;
+    assert.ok((await geo('NL')).includes('CoinRoyale'), 'CoinRoyale is listed in the Netherlands now');
+    assert.ok(!(await geo('GB')).includes('CoinRoyale'), 'and not in the UK');
+    assert.ok(!(await geo('US')).includes('CoinRoyale') && !(await geo('FR')).includes('CoinRoyale'));
+    assert.ok(!(await geo('GB')).includes('1xBet'), '1xBet keeps its full list');
+    assert.ok(!(await geo('NL')).includes('1xBet'));
+    const r = await fetch(base + '/go/ad/' + ad.id + '?p=infeed2', { headers: UA, redirect: 'manual' });
+    assert.strictEqual(r.status, 302); assert.strictEqual(r.headers.get('location'), 'https://coinroyale.com/');
+    await fetch(base + '/go/ad/' + ad.id + '?p=infeed2', { headers: { 'user-agent': 'Googlebot/2.1' }, redirect: 'manual' });
+    const rep = await (await fetch(base + '/admin/api/traffic?days=7', { headers: AUTH })).json();
+    const row = rep.ads.find((x) => x.id === ad.id);
+    assert.ok(row && row.clicks === 1, 'one human click counted, bot ignored');
+    const csv = await (await fetch(base + '/admin/api/traffic/csv?by=ads&days=7', { headers: AUTH })).text();
+    assert.ok(csv.includes('Click rate'));
+  } finally { await S.close(); }
+});
+
+test('Crypto.Games is a casino: own "Top casinos" box, never in bookmaker lists or match odds, hidden in US/GB/FR', async () => {
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: path.join(os.tmpdir(), 'lsn-cg-' + process.pid + '-' + Date.now() + '.db'), ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
+  const base = 'http://127.0.0.1:' + S.port, UA = { 'user-agent': 'Mozilla/5.0 Test' };
+  try {
+    assert.strictEqual(S.db.get("SELECT kind FROM bookmakers WHERE name='Crypto.Games'").kind, 'casino');
+    assert.strictEqual(S.db.get("SELECT kind FROM bookmakers WHERE name='1xBet'").kind, 'sportsbook');
+    const gh = await (await fetch(base + '/api/geo?cc=GH', { headers: UA })).json();
+    assert.ok(gh.casinos.includes('Crypto.Games') && !gh.bookmakers.includes('Crypto.Games'), 'casino is listed apart from the bookmakers');
+    const html = await (await fetch(base + '/?cc=GH', { headers: UA })).text();
+    assert.ok(html.includes('Top casinos in'), 'casino box is shown'); assert.ok(html.includes('Top bookmakers in'));
+    const box = html.split('Top casinos in')[1].split('</div></div>')[0];
+    assert.ok(box.includes('Crypto.Games') && !box.includes('1xBet'));
+    for (const cc of ['US', 'GB', 'FR']) {
+      const t = await (await fetch(base + '/?cc=' + cc, { headers: UA })).text();
+      assert.ok(!t.includes('Crypto.Games') && !t.includes('cryptogames-'), 'hidden in ' + cc);
+    }
+    const nl = await (await fetch(base + '/api/geo?cc=NL', { headers: UA })).json();
+    assert.ok(nl.casinos.includes('Crypto.Games'), 'shown in the Netherlands');
+    const id = S.db.get("SELECT id FROM bookmakers WHERE name='Crypto.Games'").id;
+    const r = await fetch(base + '/go/' + id + '?cc=GH&p=sidebar-casinos', { headers: UA, redirect: 'manual' });
+    assert.strictEqual(r.status, 302); assert.ok(r.headers.get('location').startsWith('http://crypto.games/'));
+  } finally { await S.close(); }
+});

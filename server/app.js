@@ -42,7 +42,7 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
 
   function handleGo(req, res, url, id) {
     const g = geo(req, url), ip = http.clientIp(req, cfg.trustProxy);
-    const item = getBk(g.code).items.find((b) => b.id === id);
+    const bkr = getBk(g.code), item = bkr.items.concat(bkr.casinos || []).find((b) => b.id === id);
     let dest = '';
     if (item) {
       const placement = String(url.searchParams.get('p') || '').replace(/[^a-z0-9_-]/gi, '').slice(0, 40);
@@ -54,6 +54,15 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
       }
     }
     // The destination is resolved per visitor country on the server; the URL never appears in page HTML.
+    http.redirect(res, dest || '/', 302, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+  }
+
+  // Click on an image ad: count it, then send the visitor to the advertiser.
+  function handleAdGo(req, res, url, id) {
+    const g = geo(req, url);
+    const c = db.get('SELECT link_url FROM ad_creatives WHERE id=? AND active=1', id);
+    const dest = c && /^https?:\/\//i.test(c.link_url || '') ? c.link_url : '';
+    if (dest && goLimit(http.clientIp(req, cfg.trustProxy)).ok) analytics.adClick(req, id, g.code);
     http.redirect(res, dest || '/', 302, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
   }
 
@@ -94,6 +103,7 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
       hdr['X-Frame-Options'] = null;
       hdr['Content-Security-Policy'] = "frame-ancestors 'self' " + allow.join(' ');
     }
+    if (out.status === 200 && req.method === 'GET' && out.ctx && out.ctx.adsShown) analytics.recordAds(req, out.ctx.adsShown, g.code);
     if (out.status === 200 && req.method === 'GET' && !(out.page && out.page.embed)) analytics.record(req, url.pathname, g.code, http.clientIp(req, cfg.trustProxy));
     http.send(req, res, out.status, out.html, hdr);
   }
@@ -118,6 +128,8 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
 
       if (p === '/admin' || p.startsWith('/admin/')) return adminApi.handle(req, res, url, ip);
 
+      const mAd = p.match(/^\/go\/ad\/(\d+)\/?$/);
+      if (mAd) return handleAdGo(req, res, url, Number(mAd[1]));
       const mGo = p.match(/^\/go\/(\d+)\/?$/);
       if (mGo) return handleGo(req, res, url, Number(mGo[1]));
 
@@ -137,7 +149,7 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
           return hub.add(req, res, { cc: g.code, ip });
         }
         if (p === '/api/countries') return http.json(req, res, 200, countryList.map((c) => [c.code, c.name]), { 'Cache-Control': 'public, max-age=86400' });
-        if (p === '/api/geo') { const g = geo(req, url); const bk = getBk(g.code); return http.json(req, res, 200, { cc: g.code, name: nameOf(g.code), source: g.source, betting: bk.compliance.betting_allowed, bookmakers: bk.items.map((b) => b.name) }, NOCACHE); }
+        if (p === '/api/geo') { const g = geo(req, url); const bk = getBk(g.code); return http.json(req, res, 200, { cc: g.code, name: nameOf(g.code), source: g.source, betting: bk.compliance.betting_allowed, bookmakers: bk.items.map((b) => b.name), casinos: (bk.casinos || []).map((b) => b.name) }, NOCACHE); }
         if (p === '/api/teams') { // names for followed team ids (used to restore a "My teams" link on a new device)
           const ids = String(url.searchParams.get('ids') || '').split(',').map(Number).filter((n) => n > 0).slice(0, 60);
           return http.json(req, res, 200, Array.from(store.teamsByIds(ids).values()).map((t) => ({ id: t.id, name: t.name, slug: t.slug })), { 'Cache-Control': 'public, max-age=300' });

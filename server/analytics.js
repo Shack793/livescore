@@ -44,11 +44,29 @@ function create(db, cfg) {
     } catch (e) { /* statistics must never break a page */ }
   }
 
+  // ad statistics: one view each time a creative is shown on a page, one click each time it is clicked
+  function recordAds(req, ids, cc) {
+    try {
+      const ua = String(req.headers['user-agent'] || '');
+      if (!ua || BOT.test(ua) || !ids || !ids.length) return;
+      const day = dayOf(Date.now()), cty = (cc || 'ZZ').toUpperCase().slice(0, 2);
+      Array.from(new Set(ids)).forEach((id) => db.run('INSERT INTO ad_stats_daily (day,creative_id,country,views,clicks) VALUES (?,?,?,1,0) ON CONFLICT(day,creative_id,country) DO UPDATE SET views=views+1', day, id, cty));
+    } catch (e) { /* never break a page */ }
+  }
+  function adClick(req, id, cc) {
+    try {
+      const ua = String(req.headers['user-agent'] || '');
+      if (!ua || BOT.test(ua)) return;
+      const day = dayOf(Date.now()), cty = (cc || 'ZZ').toUpperCase().slice(0, 2);
+      db.run('INSERT INTO ad_stats_daily (day,creative_id,country,views,clicks) VALUES (?,?,?,0,1) ON CONFLICT(day,creative_id,country) DO UPDATE SET clicks=clicks+1', day, id, cty);
+    } catch (e) { /* ignore */ }
+  }
+
   // keep 14 months
   function prune() {
     try {
       const cut = dayOf(Date.now() - 430 * 86400000);
-      ['traffic_daily', 'visitors_seen', 'pages_daily', 'refs_daily'].forEach((t) => db.run('DELETE FROM ' + t + ' WHERE day<?', cut));
+      ['traffic_daily', 'visitors_seen', 'pages_daily', 'refs_daily', 'ad_stats_daily'].forEach((t) => db.run('DELETE FROM ' + t + ' WHERE day<?', cut));
     } catch (e) { /* ignore */ }
   }
 
@@ -88,6 +106,10 @@ function create(db, cfg) {
       byCountry,
       pages: db.all('SELECT page, SUM(views) views FROM pages_daily WHERE ' + W + ' GROUP BY page ORDER BY views DESC LIMIT 30', ...A),
       referrers: db.all('SELECT host, SUM(views) views FROM refs_daily WHERE ' + W + ' GROUP BY host ORDER BY views DESC LIMIT 20', ...A),
+      ads: db.all('SELECT s.creative_id id, COALESCE(c.name, \'(removed ad)\') name, COALESCE(c.slot_key, \'\') slot, SUM(s.views) views, SUM(s.clicks) clicks FROM ad_stats_daily s LEFT JOIN ad_creatives c ON c.id=s.creative_id WHERE s.day>=? AND s.day<=? GROUP BY s.creative_id ORDER BY views DESC', ...A)
+        .map((x) => Object.assign(x, { ctr: x.views ? Math.round(x.clicks / x.views * 1000) / 10 : 0 })),
+      adCountries: db.all('SELECT COALESCE(c.name, \'(removed ad)\') name, s.country code, SUM(s.views) views, SUM(s.clicks) clicks FROM ad_stats_daily s LEFT JOIN ad_creatives c ON c.id=s.creative_id WHERE s.day>=? AND s.day<=? GROUP BY s.creative_id, s.country ORDER BY views DESC LIMIT 200', ...A)
+        .map((x) => Object.assign(x, { country: nm(x.code), ctr: x.views ? Math.round(x.clicks / x.views * 1000) / 10 : 0 })),
       clicksByBookmaker: db.all('SELECT b.name name, COUNT(*) n FROM clicks c JOIN bookmakers b ON b.id=c.bookmaker_id WHERE c.ts>=? AND c.ts<? GROUP BY b.id ORDER BY n DESC', cts, cte)
     };
   }
@@ -103,11 +125,12 @@ function create(db, cfg) {
     const esc = (v) => { v = String(v == null ? '' : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     let head, rows;
     if (by === 'country') { head = ['Country', 'Code', 'Page views', 'Unique visitors', 'Affiliate clicks']; rows = r.byCountry.map((x) => [x.country, x.code, x.views, x.visitors, x.clicks]); }
+    else if (by === 'ads') { head = ['Ad', 'Country', 'Views', 'Clicks', 'Click rate %']; rows = r.adCountries.map((x) => [x.name, x.country, x.views, x.clicks, x.ctr]); }
     else if (by === 'pages') { head = ['Page', 'Page views']; rows = r.pages.map((x) => [x.page, x.views]); }
     else if (by === 'referrers') { head = ['Referrer', 'Page views']; rows = r.referrers.map((x) => [x.host, x.views]); }
     else { const k = by === 'week' ? 'byWeek' : by === 'month' ? 'byMonth' : 'byDay'; head = [k === 'byWeek' ? 'Week starting' : k === 'byMonth' ? 'Month' : 'Day', 'Page views', 'Unique visitors']; rows = r[k].map((x) => [x.label, x.views, x.visitors]); }
     return '﻿' + [head].concat(rows).map((l) => l.map(esc).join(',')).join('\r\n') + '\r\n';
   }
-  return { record, report, summary, csv, prune };
+  return { recordAds, adClick, record, report, summary, csv, prune };
 }
 module.exports = { create };

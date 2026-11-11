@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS visitors_seen (vid TEXT NOT NULL, day TEXT NOT NULL, 
 CREATE INDEX IF NOT EXISTS idx_visitors_day ON visitors_seen(day);
 CREATE TABLE IF NOT EXISTS pages_daily (day TEXT NOT NULL, page TEXT NOT NULL, views INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, page));
 CREATE TABLE IF NOT EXISTS refs_daily (day TEXT NOT NULL, host TEXT NOT NULL, views INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, host));
+CREATE TABLE IF NOT EXISTS ad_stats_daily (day TEXT NOT NULL, creative_id INTEGER NOT NULL, country TEXT NOT NULL, views INTEGER NOT NULL DEFAULT 0, clicks INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, creative_id, country));
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT ''
 );
@@ -111,6 +112,7 @@ function open(file) {
   raw.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;');
   raw.exec(SCHEMA);
   try { raw.exec('ALTER TABLE odds_current ADD COLUMN seen_at INTEGER'); } catch (e) { /* column already there */ }
+  try { raw.exec("ALTER TABLE bookmakers ADD COLUMN kind TEXT NOT NULL DEFAULT 'sportsbook'"); } catch (e) { /* column already there */ }
 
   const cache = new Map();
   const stmt = (sql) => { let s = cache.get(sql); if (!s) { s = raw.prepare(sql); cache.set(sql, s); } return s; };

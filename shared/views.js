@@ -125,12 +125,15 @@
     groups.sort(function (a, b) {
       return (b.league.top - a.league.top) || (a.country.kind === 'region' ? -1 : 0) - (b.country.kind === 'region' ? -1 : 0) || a.country.name.localeCompare(b.country.name) || a.league.name.localeCompare(b.league.name);
     });
-    var html = '', n = 0;
+    var html = '', n = 0, pos2 = Math.max(4, Math.min(6, groups.length - 1)), pos4 = Math.max(pos2 + 2, Math.min(9, groups.length - 1)); // 2nd ad sits after the 6th league, or earlier on short days
     groups.forEach(function (g, i) {
       html += '<section class="lg" data-lg="' + g.league.id + '">' + leagueHead(ctx, g.sport, g.league, g.country) +
         g.list.map(function (m) { return matchRow(m, ctx, ctx.bettingOn ? O.primary(oddsMap.get(m.id) || [], ctx.bk.items, m.sport) : null); }).join('') + '</section>';
       n++;
       if (opts.infeed && n === 3 && i < groups.length - 1) html += adSlot(ctx, 'infeed');
+      if (opts.infeed && n === pos2 && i < groups.length - 1) html += adSlot(ctx, 'infeed2');
+      if (opts.infeed && n === 12 && i < groups.length - 1) html += adSlot(ctx, 'infeed3');
+      if (opts.infeed && n === pos4 && i < groups.length - 1) html += adSlot(ctx, 'infeed4');
     });
     return html;
   }
@@ -184,10 +187,10 @@
   }
   function creativeHtml(c) {
     if (c.ad_code) return { code: c.ad_code, fallback: c.fallback_code || '' };
-    var img = safeUrl(c.image_url), link = safeUrl(c.link_url);
+    var iu = String(c.image_url || '').trim(), img = /^\/assets\/[A-Za-z0-9_\-\/.]+$/.test(iu) && iu.indexOf('..') < 0 ? iu : safeUrl(iu), link = safeUrl(c.link_url);
     if (!img) return null;
     var tag = '<img src="' + E(img) + '" alt="' + E(c.alt_text || c.name || 'Advertisement') + '" loading="lazy" style="display:block;max-width:100%;height:auto;margin:0 auto">';
-    return { code: '', fallback: '', plain: link ? '<a href="' + E(link) + '" target="_blank" rel="sponsored noopener">' + tag + '</a>' : tag };
+    return { code: '', fallback: '', plain: link ? '<a href="' + (c.id ? '/go/ad/' + Number(c.id) + '?p=' + encodeURIComponent(c.slot_key || '') : E(link)) + '" target="_blank" rel="sponsored noopener">' + tag + '</a>' : tag };
   }
 
   function adSlot(ctx, key, matchId) {
@@ -198,6 +201,7 @@
       if (cr.mode === 'hide') return '';
       var h = creativeHtml(cr);
       if (h) {
+        if (cr.id) (ctx.adsShown = ctx.adsShown || []).push(Number(cr.id));
         s = Object.assign({}, s, { ad_code: h.code, fallback_code: h.plain || h.fallback });
         if (h.plain) { return '<div class="ad ad-' + E(s.placement) + '" data-slot="' + E(s.slot_key) + '" data-creative="' + (Number(cr.id) || 0) + '" style="' + (s.width ? 'max-width:' + s.width + 'px' : '') + '"><span class="ad-lab">Advertisement</span>' + h.plain + '</div>'; }
       }
@@ -312,8 +316,17 @@
     }).join('') + '<small class="muted">' + ctx.bk.compliance.min_age + '+ · Ad · T&amp;Cs apply. ' + E(ctx.bk.compliance.rg_text) + '</small></div>';
   }
 
+  // Casinos (own games, no odds) get their own box below the bookmakers.
+  function casinoBox(ctx) {
+    var list = (ctx.bk.casinos || []).slice(0, 4);
+    if (!list.length || !ctx.bk.compliance.betting_allowed) return '';
+    return '<div class="box offers casinos"><h3>Top casinos in ' + E(ctx.countryName) + '</h3>' + list.map(function (b) {
+      return '<div class="of-i">' + bkChip(b) + '<div class="of-t"><b>' + E(b.name) + '</b><span>' + E(b.offer || 'Casino games') + '</span></div>' + cta(b, null, 'sidebar-casinos', 'Play') + '</div>';
+    }).join('') + '<small class="muted">' + ctx.bk.compliance.min_age + '+ · Ad · T&amp;Cs apply. Gambling can be addictive. Play responsibly.</small></div>';
+  }
+
   function rightSide(ctx) {
-    return '<aside class="side right">' + adSlot(ctx, 'sidebar-1') + offersBox(ctx) + adSlot(ctx, 'sidebar-2') + '</aside>';
+    return '<aside class="side right">' + adSlot(ctx, 'sidebar-1') + offersBox(ctx) + casinoBox(ctx) + adSlot(ctx, 'sidebar-casino') + adSlot(ctx, 'sidebar-2') + adSlot(ctx, 'sidebar-3') + '</aside>';
   }
 
   function footer(ctx) {

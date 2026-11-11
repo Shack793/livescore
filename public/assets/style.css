@@ -379,3 +379,4 @@ body{overflow-x:hidden;overflow-x:clip;max-width:100%;position:relative}
 :root[data-theme="dark"] .otag{color:#ffd48a;background:#3a2b0a;border-color:#6b4f12}
 :root[data-theme="dark"] .strip-note{color:#ffd48a;background:#2e2308;border-color:#6b4f12}
 @media (prefers-color-scheme:dark){:root[data-theme=auto] .otag{color:#ffd48a;background:#3a2b0a;border-color:#6b4f12}:root[data-theme=auto] .strip-note{color:#ffd48a;background:#2e2308;border-color:#6b4f12}}
+.ad-infeed{margin-left:auto;margin-right:auto}

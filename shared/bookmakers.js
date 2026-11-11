@@ -71,11 +71,15 @@
         affiliate_url: w.affiliate_url || b.affiliate_url,
         offer: w.offer || b.offer || '',
         license_text: w.license_text || b.license_text || '',
+        kind: b.kind === 'casino' ? 'casino' : 'sportsbook',
         sort: w.sort_order != null ? Number(w.sort_order) : Number(b.sort_order || 0)
       });
     });
     items.sort(function (a, b) { return a.sort - b.sort || a.id - b.id; });
-    return { compliance: compliance, items: items };
+    // Casinos have no odds and are not offered as bets on matches: they are kept apart from the sportsbooks.
+    var casinos = items.filter(function (b) { return b.kind === 'casino'; });
+    items = items.filter(function (b) { return b.kind !== 'casino'; });
+    return { compliance: compliance, items: items, casinos: casinos };
   }
 
   // Never ship affiliate URLs to the browser: links go through /go/:id which
