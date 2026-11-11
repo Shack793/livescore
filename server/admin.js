@@ -180,7 +180,15 @@ function create({ cfg, db, store, sync, hub, geoip, log, getBk, clearCaches, ana
     throw err(404, 'Not found');
   }
 
+  // Sign out. The admin uses the browser's own login box, so the browser remembers the password until told otherwise:
+  // answering 401 to a request that carries it makes the browser forget it (the visitor just cancels the new login box).
+  const SIGNED_OUT = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Signed out</title><body style="font-family:system-ui,sans-serif;max-width:420px;margin:12vh auto;padding:0 16px;text-align:center"><h2>You are signed out</h2><p>Close this tab, or <a href="/admin/">sign in again</a>.</p></body>';
   async function handle(req, res, u, ip) {
+    if (u.pathname === '/admin/logout' || u.pathname === '/admin/logout/') {
+      const h = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' };
+      if (req.headers.authorization) h['WWW-Authenticate'] = 'Basic realm="LiveScoreNow admin", charset="UTF-8"';
+      return http.send(req, res, req.headers.authorization ? 401 : 200, SIGNED_OUT, h);
+    }
     if (!auth(req, res, ip)) return;
     const p = u.pathname;
     if (p.startsWith('/admin/api/')) {

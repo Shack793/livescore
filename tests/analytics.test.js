@@ -37,3 +37,17 @@ test('analytics: counts visits per country/day/week/month, ignores bots, stores 
     assert.strictEqual((await fetch(base + '/admin/api/traffic?days=7')).status, 401);
   } finally { await S.close(); ['', '-wal', '-shm'].forEach((x) => { try { fs.unlinkSync(dbFile + x); } catch (e) { /* ignore */ } }); }
 });
+
+test('admin sign out: /admin/logout makes the browser forget the password', async () => {
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: path.join(os.tmpdir(), 'lsn-lo-' + process.pid + '-' + Date.now() + '.db'), ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test' } });
+  const base = 'http://127.0.0.1:' + S.port;
+  try {
+    const withAuth = await fetch(base + '/admin/logout', { headers: { authorization: 'Basic ' + Buffer.from('admin:pw').toString('base64') } });
+    assert.strictEqual(withAuth.status, 401);
+    assert.ok(withAuth.headers.get('www-authenticate'));
+    assert.ok((await withAuth.text()).includes('signed out'));
+    const without = await fetch(base + '/admin/logout');
+    assert.strictEqual(without.status, 200);
+    assert.ok((await (await fetch(base + '/admin/', { headers: { authorization: 'Basic ' + Buffer.from('admin:pw').toString('base64') } })).text()).includes('Sign out'), 'button is in the admin header');
+  } finally { await S.close(); }
+});
