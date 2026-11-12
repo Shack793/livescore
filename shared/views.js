@@ -191,7 +191,7 @@
     if (!img) return null;
     // Phones get a compact 320x100 version of the big 300x250 banners: for /assets/ads/NAME-300x250...png the file is /assets/ads/NAME-300x250...-m.png.
     var mob = /^\/assets\/ads\/[A-Za-z0-9_\-]*300x250[A-Za-z0-9_\-]*\.png$/.test(img) ? img.replace(/\.png$/, '-m.png') : '';
-    var tag = (mob ? '<picture><source media="(max-width:820px)" srcset="' + E(mob) + '">' : '') + '<img src="' + E(img) + '" alt="' + E(c.alt_text || c.name || 'Advertisement') + '" loading="lazy" style="display:block;max-width:100%;height:auto;margin:0 auto">' + (mob ? '</picture>' : '');
+    var tag = (mob ? '<picture><source media="(max-width:820px) and (pointer:coarse)" srcset="' + E(mob) + '">' : '') + '<img src="' + E(img) + '" alt="' + E(c.alt_text || c.name || 'Advertisement') + '" loading="lazy" style="display:block;max-width:100%;height:auto;margin:0 auto">' + (mob ? '</picture>' : '');
     return { code: '', fallback: '', mob: !!mob, plain: link ? '<a href="' + (c.id ? '/go/ad/' + Number(c.id) + '?p=' + encodeURIComponent(c.slot_key || '') : E(link)) + '" target="_blank" rel="sponsored noopener">' + tag + '</a>' : tag };
   }
 
