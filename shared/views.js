@@ -189,8 +189,10 @@
     if (c.ad_code) return { code: c.ad_code, fallback: c.fallback_code || '' };
     var iu = String(c.image_url || '').trim(), img = /^\/assets\/[A-Za-z0-9_\-\/.]+$/.test(iu) && iu.indexOf('..') < 0 ? iu : safeUrl(iu), link = safeUrl(c.link_url);
     if (!img) return null;
-    var tag = '<img src="' + E(img) + '" alt="' + E(c.alt_text || c.name || 'Advertisement') + '" loading="lazy" style="display:block;max-width:100%;height:auto;margin:0 auto">';
-    return { code: '', fallback: '', plain: link ? '<a href="' + (c.id ? '/go/ad/' + Number(c.id) + '?p=' + encodeURIComponent(c.slot_key || '') : E(link)) + '" target="_blank" rel="sponsored noopener">' + tag + '</a>' : tag };
+    // Phones get a compact 320x100 version of the big 300x250 banners: for /assets/ads/NAME-300x250...png the file is /assets/ads/NAME-300x250...-m.png.
+    var mob = /^\/assets\/ads\/[A-Za-z0-9_\-]*300x250[A-Za-z0-9_\-]*\.png$/.test(img) ? img.replace(/\.png$/, '-m.png') : '';
+    var tag = (mob ? '<picture><source media="(max-width:820px)" srcset="' + E(mob) + '">' : '') + '<img src="' + E(img) + '" alt="' + E(c.alt_text || c.name || 'Advertisement') + '" loading="lazy" style="display:block;max-width:100%;height:auto;margin:0 auto">' + (mob ? '</picture>' : '');
+    return { code: '', fallback: '', mob: !!mob, plain: link ? '<a href="' + (c.id ? '/go/ad/' + Number(c.id) + '?p=' + encodeURIComponent(c.slot_key || '') : E(link)) + '" target="_blank" rel="sponsored noopener">' + tag + '</a>' : tag };
   }
 
   function adSlot(ctx, key, matchId) {
@@ -203,7 +205,7 @@
       if (h) {
         if (cr.id) (ctx.adsShown = ctx.adsShown || []).push(Number(cr.id));
         s = Object.assign({}, s, { ad_code: h.code, fallback_code: h.plain || h.fallback });
-        if (h.plain) { return '<div class="ad ad-' + E(s.placement) + '" data-slot="' + E(s.slot_key) + '" data-creative="' + (Number(cr.id) || 0) + '" style="' + (s.width ? 'max-width:' + s.width + 'px' : '') + '"><span class="ad-lab">Advertisement</span>' + h.plain + '</div>'; }
+        if (h.plain) { return '<div class="ad ad-' + E(s.placement) + (h.mob ? ' ad-m' : '') + '" data-slot="' + E(s.slot_key) + '" data-creative="' + (Number(cr.id) || 0) + '" style="' + (s.width ? 'max-width:' + s.width + 'px' : '') + '"><span class="ad-lab">Advertisement</span>' + h.plain + '</div>'; }
       }
     }
     var size = '', inner = '';

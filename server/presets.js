@@ -6,7 +6,9 @@
 // reportedly list it as unauthorised. BQ is Bonaire, Sint Eustatius and Saba together. Bump RULES_VERSION when this list changes
 // and the new countries are added once to existing installs (rules you deleted later in the admin are not re-added after that).
 const RULES_VERSION = 2;
-const BLOCKED = ['AU', 'CW', 'FR', 'NL', 'ES', 'US', 'GB', 'AW', 'BQ', 'AL', 'AM', 'CL', 'CO', 'HR', 'CY', 'CZ', 'EE', 'GI', 'GR', 'IT', 'LV', 'LT', 'MT', 'MD', 'MK', 'PL', 'RO', 'UY'];
+const BLOCKED = ['AU', 'CW', 'FR', 'NL', 'ES', 'US', 'GB', 'AW', 'BQ', 'AL', 'AM', 'CL', 'CO', 'HR', 'CY', 'CZ', 'EE', 'GI', 'GR', 'IT', 'LV', 'LT', 'MT', 'MD', 'MK', 'PL', 'RO', 'UY',
+  'BE', 'SE', 'NO']; // BE, SE and NO added on your request; applied once to existing installs below (see ADDED)
+const ADDED = ['BE', 'SE', 'NO'];
 // CoinRoyale is hidden only in these for now (US, UK, France); add more here when their country list is known, and bump CR_VERSION.
 const CR_BLOCKED = ['US', 'GB', 'FR'];
 const CR_VERSION = 2;
@@ -118,6 +120,29 @@ function install(db) {
       setV(db, key);
     }
   });
+  // One-time: countries added to the 1xBet block list after the first release (so earlier installs get them too).
+  ADDED.forEach((cc) => {
+    const k = 'preset_block_' + cc.toLowerCase();
+    if (getV(db, k) >= 1) return;
+    const bk = db.all('SELECT id,name FROM bookmakers').filter((b) => norm(b.name) === '1xbet')[0];
+    if (bk) db.run('INSERT OR IGNORE INTO bookmaker_geo (bookmaker_id,scope_type,scope_value,mode) VALUES (?,?,?,?)', bk.id, 'country', cc, 'block');
+    AD_PRESETS.forEach((a) => {
+      const nm = a.name + ' (' + cc + ' off)';
+      if (db.get('SELECT id FROM ad_creatives WHERE name=?', nm)) return;
+      db.run("INSERT INTO ad_creatives (slot_key,name,scope_type,scope_value,mode,ad_code,fallback_code,image_url,link_url,alt_text,betting_related,priority,active,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,datetime('now'))",
+        a.slot_key, nm, 'country', cc, 'hide', '', '', '', '', '', a.betting_related, a.priority);
+    });
+    db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)', k, '1');
+  });
+  // One-time: NO and SE were briefly added to CoinRoyale and Crypto.Games by mistake; they are 1xBet-only. Remove them again.
+  if (getV(db, 'preset_undo_no_se') < 1) {
+    ['coinroyale', 'cryptogames'].forEach((who) => {
+      const bk = db.all('SELECT id,name FROM bookmakers').filter((x) => norm(x.name) === who)[0];
+      if (bk) db.run("DELETE FROM bookmaker_geo WHERE bookmaker_id=? AND scope_type='country' AND scope_value IN ('NO','SE') AND mode='block'", bk.id);
+    });
+    db.run("DELETE FROM ad_creatives WHERE (name LIKE 'CoinRoyale test banner%' OR name LIKE 'Crypto.Games test banner%') AND (name LIKE '%(NO off)' OR name LIKE '%(SE off)')");
+    db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('preset_undo_no_se','1')");
+  }
   // One-time: CoinRoyale used to be hidden in the full 1xBet country list; keep only CR_BLOCKED.
   const crKey = 'preset_cr_countries';
   if (Number((db.get('SELECT value v FROM settings WHERE key=?', crKey) || {}).v || 0) < CR_VERSION) {

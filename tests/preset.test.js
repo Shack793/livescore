@@ -46,7 +46,7 @@ test('preset: full block list applied once to an existing install, and admin rem
   const dbFile = path.join(os.tmpdir(), 'lsn-prev-' + process.pid + '-' + Date.now() + '.db');
   const env = { PORT: '0', DB_PATH: dbFile, SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' };
   let S = await start({ log: () => {}, env });
-  const want = ['AU', 'CW', 'FR', 'NL', 'ES', 'US', 'GB', 'AW', 'BQ', 'AL', 'AM', 'CL', 'CO', 'HR', 'CY', 'CZ', 'EE', 'GI', 'GR', 'IT', 'LV', 'LT', 'MT', 'MD', 'MK', 'PL', 'RO', 'UY'];
+  const want = ['AU', 'CW', 'FR', 'NL', 'ES', 'US', 'GB', 'AW', 'BQ', 'AL', 'AM', 'CL', 'CO', 'HR', 'CY', 'CZ', 'EE', 'GI', 'GR', 'IT', 'LV', 'LT', 'MT', 'MD', 'MK', 'PL', 'RO', 'UY', 'BE', 'SE', 'NO'];
   try {
     const b = S.db.get("SELECT id FROM bookmakers WHERE name='1xBet'");
     const blocked = () => S.db.all("SELECT scope_value v FROM bookmaker_geo WHERE bookmaker_id=? AND mode='block'", b.id).map((r) => r.v).sort();
@@ -118,5 +118,39 @@ test('Crypto.Games is a casino: own "Top casinos" box, never in bookmaker lists 
     const id = S.db.get("SELECT id FROM bookmakers WHERE name='Crypto.Games'").id;
     const r = await fetch(base + '/go/' + id + '?cc=GH&p=sidebar-casinos', { headers: UA, redirect: 'manual' });
     assert.strictEqual(r.status, 302); assert.ok(r.headers.get('location').startsWith('http://crypto.games/'));
+  } finally { await S.close(); }
+});
+
+test('Belgium is blocked for 1xBet (bookmaker and banner), including on installs that already had the preset', async () => {
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: path.join(os.tmpdir(), 'lsn-be-' + process.pid + '-' + Date.now() + '.db'), ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
+  const base = 'http://127.0.0.1:' + S.port, UA = { 'user-agent': 'Mozilla/5.0 Test' };
+  try {
+    const names = async (cc) => (await (await fetch(base + '/api/geo?cc=' + cc, { headers: UA })).json()).bookmakers;
+    assert.ok(!(await names('BE')).includes('1xBet') && !(await names('SE')).includes('1xBet'), 'hidden in Belgium and Sweden');
+    assert.ok((await names('DE')).includes('1xBet'), 'still shown in Germany');
+    // simulate an older install: remove the Belgium rows and the one-time marker, then run the install again
+    const id = S.db.get("SELECT id FROM bookmakers WHERE name='1xBet'").id;
+    S.db.run("DELETE FROM bookmaker_geo WHERE bookmaker_id=? AND scope_value='BE'", id);
+    S.db.run("DELETE FROM ad_creatives WHERE name LIKE '% (BE off)' AND name LIKE '1xBet%'");
+    S.db.run("DELETE FROM settings WHERE key='preset_block_be'");
+    require('../server/presets').install(S.db);
+    assert.ok(S.db.get("SELECT 1 x FROM bookmaker_geo WHERE bookmaker_id=? AND scope_value='BE' AND mode='block'", id), 'bookmaker block restored once');
+    assert.ok(S.db.get("SELECT 1 x FROM ad_creatives WHERE name LIKE '1xBet%(BE off)' AND mode='hide'"), 'banner hidden in BE');
+  } finally { await S.close(); }
+});
+
+test('Norway: 1xBet blocks it; CoinRoyale and Crypto.Games do not (and an earlier NO/SE addition is undone once)', async () => {
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: path.join(os.tmpdir(), 'lsn-no-' + process.pid + '-' + Date.now() + '.db'), ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
+  const base = 'http://127.0.0.1:' + S.port, UA = { 'user-agent': 'Mozilla/5.0 Test' };
+  try {
+    const geo = async (cc) => (await fetch(base + '/api/geo?cc=' + cc, { headers: UA })).json();
+    for (const cc of ['NO', 'SE']) { const g = await geo(cc); assert.ok(!g.bookmakers.includes('1xBet'), '1xBet hidden in ' + cc); assert.ok(g.bookmakers.includes('CoinRoyale') && g.casinos.includes('Crypto.Games'), 'partners shown in ' + cc); }
+    // an install that got the mistaken NO/SE rows
+    S.db.run("INSERT OR IGNORE INTO bookmaker_geo (bookmaker_id,scope_type,scope_value,mode) SELECT id,'country','NO','block' FROM bookmakers WHERE name='CoinRoyale'");
+    S.db.run("INSERT INTO ad_creatives (slot_key,name,scope_type,scope_value,mode,betting_related,active) VALUES ('infeed4','Crypto.Games test banner (SE off)','country','SE','hide',1,1)");
+    S.db.run("DELETE FROM settings WHERE key='preset_undo_no_se'");
+    require('../server/presets').install(S.db);
+    assert.ok((await geo('NO')).bookmakers.includes('CoinRoyale'), 'undone');
+    assert.ok(!S.db.get("SELECT 1 x FROM ad_creatives WHERE name='Crypto.Games test banner (SE off)'"));
   } finally { await S.close(); }
 });
