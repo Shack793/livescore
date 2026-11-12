@@ -317,7 +317,7 @@
     var body = matchBody(ctx, store, m, d, comp, st, teams);
     if (query.frag) return { fragment: matchHeader(ctx, m, d) + matchOddsStrip(ctx, m, rows) + '<div id="mbody">' + body + '</div>' };
     var html = crumbs([{ label: sportName(m.sport), href: V.sportUrl(m.sport) }, { label: m.country.name, href: '/' + m.sport + '/' + m.country.slug + '/' }, { label: m.league.name, href: V.leagueUrl(m.sport, m.country, m.league) }, { label: m.home.name + ' – ' + m.away.name }]) +
-      '<div id="mwrap">' + matchHeader(ctx, m, d) + (ctx.forumUrl ? '<a class="discuss" href="' + E(V.forumMatchLink(ctx, m)) + '">💬 Discuss this match on ' + E(ctx.forumName) + ' ›</a>' : '') + matchOddsStrip(ctx, m, rows) + V.adSlot(ctx, 'match-strip', m.id) + '<div id="mbody">' + body + '</div></div>';
+      '<div id="mwrap">' + matchHeader(ctx, m, d) + (ctx.forumUrl ? '<a class="discuss" href="' + E(V.forumMatchLink(ctx, m)) + '">💬 Discuss this match on ' + E(ctx.forumName) + ' ›</a>' : '') + matchOddsStrip(ctx, m, rows) + V.adSlot(ctx, 'match-strip', m.id) + V.adSlot(ctx, 'match-strip2', m.id) + '<div id="mbody">' + body + '</div></div>';
     var score = V.hasScore(m) ? ' ' + m.hs + '-' + m.as : '';
     return {
       kind: 'match', matchId: m.id, title: m.home.name + ' vs ' + m.away.name + score + ' – Live Score & Odds',

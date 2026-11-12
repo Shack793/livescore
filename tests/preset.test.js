@@ -74,7 +74,7 @@ test('CoinRoyale test banners: shown in the feed, counted, click tracked, hidden
     assert.ok(ad, 'banner exists');
     const h = await (await fetch(base + '/?cc=GH', { headers: UA })).text();
     // the demo has fewer leagues than a busy real day, so check the slot directly if it is not on the page
-    const shown = h.includes('/assets/ads/coinroyale-320x100-a.png') || h.includes('/assets/ads/coinroyale-320x100-b.png');
+    const shown = h.includes('/assets/ads/coinroyale-320x100-a.png');
     if (shown) assert.ok(h.includes('/go/ad/'), 'banner link goes through the click counter');
     for (const cc of ['US', 'GB', 'FR']) {
       const t = await (await fetch(base + '/?cc=' + cc, { headers: UA })).text();
@@ -152,5 +152,24 @@ test('Norway: 1xBet blocks it; CoinRoyale and Crypto.Games do not (and an earlie
     require('../server/presets').install(S.db);
     assert.ok((await geo('NO')).bookmakers.includes('CoinRoyale'), 'undone');
     assert.ok(!S.db.get("SELECT 1 x FROM ad_creatives WHERE name='Crypto.Games test banner (SE off)'"));
+  } finally { await S.close(); }
+});
+
+test('match page shows 1xBet then CoinRoyale; CoinRoyale keeps one in-feed banner; banner B is removed once', async () => {
+  const S = await start({ log: () => {}, env: { PORT: '0', DB_PATH: path.join(os.tmpdir(), 'lsn-ms2-' + process.pid + '-' + Date.now() + '.db'), ADMIN_PASS: 'pw', SYNC_ENABLED: 'false', NODE_ENV: 'test', ALLOW_CC_QUERY: 'true' } });
+  const base = 'http://127.0.0.1:' + S.port, UA = { 'user-agent': 'Mozilla/5.0 Test' };
+  try {
+    const home = await (await fetch(base + '/?cc=GH', { headers: UA })).text();
+    assert.strictEqual((home.match(/coinroyale-320x100/g) || []).length, 1, 'one CoinRoyale in-feed banner');
+    const link = (home.match(/href="(\/[^"]*-vs-[^"]*\/)"/) || [])[1];
+    const m = await (await fetch(base + link + '?cc=GH', { headers: UA })).text();
+    const i1 = m.indexOf('data-slot="match-strip"'), i2 = m.indexOf('data-slot="match-strip2"');
+    assert.ok(i1 > 0 && i2 > i1, 'two cards on the match page');
+    assert.ok(/1xBet/.test(m.slice(i1, i2)) && /CoinRoyale/.test(m.slice(i2, i2 + 900)), '1xBet first, CoinRoyale second');
+    // an older install that still has banner B
+    S.db.run("INSERT INTO ad_creatives (slot_key,name,scope_type,scope_value,mode,betting_related,active) VALUES ('infeed3','CoinRoyale test banner B','all','','show',1,1)");
+    S.db.run("DELETE FROM settings WHERE key='preset_drop_cr_b'");
+    require('../server/presets').install(S.db);
+    assert.strictEqual(S.db.all("SELECT id FROM ad_creatives WHERE name LIKE 'CoinRoyale test banner B%'").length, 0);
   } finally { await S.close(); }
 });

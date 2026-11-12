@@ -56,11 +56,12 @@ const SLOT_PRESETS = [
   { slot_key: 'sidebar-3', label: 'Right sidebar – below offers (partner test)', placement: 'sidebar', width: 300, height: 250, betting_related: 1, sort_order: 10 },
   { slot_key: 'infeed4', label: 'In-feed native (after 9th league, casino)', placement: 'infeed', width: 320, height: 100, betting_related: 1, sort_order: 11 },
   // Right under the "Top casinos" box, below the bookmakers, so it never moves 1xBet.
-  { slot_key: 'sidebar-casino', label: 'Right sidebar – under Top casinos', placement: 'sidebar', width: 300, height: 250, betting_related: 1, sort_order: 12 }
+  { slot_key: 'sidebar-casino', label: 'Right sidebar – under Top casinos', placement: 'sidebar', width: 300, height: 250, betting_related: 1, sort_order: 12 },
+  // Second card on match pages, right under the first one (1xBet), so a second partner sits beside it.
+  { slot_key: 'match-strip2', label: 'Match page strip 2 (second partner)', placement: 'match', width: 728, height: 90, betting_related: 1, sort_order: 13 }
 ];
 const IMG_ADS = [
   { slot_key: 'infeed2', name: 'CoinRoyale test banner A', image_url: '/assets/ads/coinroyale-320x100-a.png', link_url: 'https://coinroyale.com/', alt_text: 'CoinRoyale – Bitcoin casino and sportsbook' },
-  { slot_key: 'infeed3', name: 'CoinRoyale test banner B', image_url: '/assets/ads/coinroyale-320x100-b.png', link_url: 'https://coinroyale.com/', alt_text: 'CoinRoyale – Sportsbook' },
   { slot_key: 'sidebar-3', name: 'CoinRoyale test banner C (sidebar)', image_url: '/assets/ads/coinroyale-300x250-c.png', link_url: 'https://coinroyale.com/', alt_text: 'CoinRoyale – Bitcoin sportsbook and casino' },
   { slot_key: 'infeed4', name: 'Crypto.Games test banner', image_url: '/assets/ads/cryptogames-320x100.png', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED },
   { slot_key: 'sidebar-casino', name: 'Crypto.Games test banner (sidebar)', image_url: '/assets/ads/cryptogames-300x250.png', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED }
@@ -134,6 +135,11 @@ function install(db) {
     });
     db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)', k, '1');
   });
+  // One-time: CoinRoyale keeps one in-feed banner (A); the second (B) is removed.
+  if (getV(db, 'preset_drop_cr_b') < 1) {
+    db.run("DELETE FROM ad_creatives WHERE name LIKE 'CoinRoyale test banner B%'");
+    db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('preset_drop_cr_b','1')");
+  }
   // One-time: NO and SE were briefly added to CoinRoyale and Crypto.Games by mistake; they are 1xBet-only. Remove them again.
   if (getV(db, 'preset_undo_no_se') < 1) {
     ['coinroyale', 'cryptogames'].forEach((who) => {
