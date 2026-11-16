@@ -14,8 +14,10 @@ async function boot(extra) {
   return { get, close };
 }
 
-test('forum links appear only when FORUM_URL is set', async () => {
-  const off = await boot({});
+test('forum links default to pitchsideforum.com and can be switched off', async () => {
+  const dflt = await boot({});
+  try { const d = await dflt.get('/'); assert.match(d.text, /https:\/\/pitchsideforum\.com/); assert.doesNotMatch(d.text, /installApp/); } finally { await dflt.close(); }
+  const off = await boot({ FORUM_URL: 'off' });
   const on = await boot({ FORUM_URL: 'https://pitchside.test/', FORUM_NAME: 'Pitchside Forum' });
   try {
     const a = await off.get('/'), b = await on.get('/');

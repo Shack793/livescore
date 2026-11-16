@@ -32,7 +32,7 @@
       needConsent: !!inp.needConsent, consent: ck.lsn_consent === 'yes' || ck.lsn_consent === 'no' ? ck.lsn_consent : '',
       isMock: !!store.isMock(), adSlots: store.adSlots(), adCreatives: store.adCreatives ? store.adCreatives() : [],
       regionCodes: (store.bookmakerConfig().regions || []).filter(function (r) { return (r.countries || []).indexOf(inp.cc || 'ZZ') !== -1; }).map(function (r) { return r.code; }), sports: sports, sport: 'football', streamOn: inp.streamOn !== false,
-      liveCounts: store.liveCounts(), q: ''
+      liveCounts: store.liveCounts(), q: '', lang: inp.lang || '', langs: cfg.langs || []
     };
     return ctx;
   }

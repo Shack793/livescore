@@ -164,3 +164,9 @@ Visitors never choose a country: it is detected from their connection. In the ad
 - **Bookmakers & regions:** which bookmakers show where (a country, a region group, or Everywhere).
 - **Ads by country:** for each ad slot, add a different banner or ad code per country, per region group, or "Everywhere else". The visitor's own country wins, then their region group, then the default. A rule can also say "show no ad there". Mark betting/casino ads so they never appear where betting is off.
 - **Country compliance:** switch all betting content off for a country.
+
+
+## Languages
+The site is also served in Spanish (`/es/`), Portuguese (`/pt/`), Arabic (`/ar/`), Chinese (`/zh/`), Korean (`/ko/`), Japanese (`/ja/`), German (`/de/`), Dutch (`/nl/`), French (`/fr/`), Hindi (`/hi/`), Bengali (`/bn/`), Indonesian (`/id/`) and Urdu (`/ur/`). Menus, labels, page titles and descriptions are translated; team, league and player names, bookmaker offers and the compliance text set in the admin stay as entered. Terms, Privacy and Cookies stay in English with a note. Wording lives in `server/lang-data.js` and `server/lang-data2.js`. Set `LANGUAGES=off` in `.env` to switch it off.
+
+English pages show a small strip offering the visitor's own language (from the browser's language, or their country if the browser names none). It is shown once; choosing or dismissing it remembers the answer. It is not shown to search engines.

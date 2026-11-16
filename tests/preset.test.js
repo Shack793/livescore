@@ -160,7 +160,8 @@ test('match page shows 1xBet then CoinRoyale; CoinRoyale keeps one in-feed banne
   const base = 'http://127.0.0.1:' + S.port, UA = { 'user-agent': 'Mozilla/5.0 Test' };
   try {
     const home = await (await fetch(base + '/?cc=GH', { headers: UA })).text();
-    assert.strictEqual((home.match(/coinroyale-320x100/g) || []).length, 1, 'one CoinRoyale in-feed banner');
+    const nLg = (home.match(/<section class="lg"/g) || []).length, nCr = (home.match(/coinroyale-320x100/g) || []).length;
+    if (nLg >= 6) assert.strictEqual(nCr, 1, 'one CoinRoyale in-feed banner'); else assert.ok(nCr <= 1, 'at most one CoinRoyale in-feed banner on a short day');  // quiet days have too few leagues for the 2nd in-feed ad
     const link = (home.match(/href="(\/[^"]*-vs-[^"]*\/)"/) || [])[1];
     const m = await (await fetch(base + link + '?cc=GH', { headers: UA })).text();
     const i1 = m.indexOf('data-slot="match-strip"'), i2 = m.indexOf('data-slot="match-strip2"');

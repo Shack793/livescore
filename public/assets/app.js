@@ -25,6 +25,10 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
 
   /* ---------- storage / cookies (never throw) ---------- */
+  /* ---------- language: links keep the /es/ style prefix, a few messages are translated ---------- */
+  var LP = window.LSN_LP || '', I18N = window.LSN_I18N || {};
+  function T(s) { return I18N[s] || s; }
+  function lp(h) { h = String(h || ''); h = h.replace(/^\/(es|pt|ar|zh|ko|ja|de|nl|fr|hi|bn|id|ur)(?=\/)/, ''); return LP && h.charAt(0) === '/' && !/^\/(assets|api|go)\b/.test(h) ? LP + h : h; }
   function lsGet(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
   function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } }
   var memCk = {}; // fallback when the page is opened from file:// (cookies are not stored there)
@@ -63,10 +67,16 @@
     var p = pins().map(function (x) { return x.id; }), t = teams().map(function (x) { return x.id; });
     $$('[data-pin]').forEach(function (el) { var on = p.indexOf(+el.getAttribute('data-pin')) !== -1; el.classList.toggle('on', on); el.textContent = on ? '★' : '☆'; });
     $$('.mr-fav').forEach(function (el) { var r = el.closest('.mrow'); if (!r) return; var on = t.indexOf(+r.getAttribute('data-h')) !== -1 || t.indexOf(+r.getAttribute('data-a')) !== -1; el.classList.toggle('on', on); el.textContent = on ? '★' : '☆'; });
-    $$('.follow[data-team]').forEach(function (b) { var on = t.indexOf(+b.getAttribute('data-team')) !== -1; b.classList.toggle('on', on); b.textContent = (on ? '★ Following' : '☆ Follow') + (b.closest('.mh-follow') ? ' ' + b.getAttribute('data-name') : ''); });
+    $$('.follow[data-team]').forEach(function (b) { var on = t.indexOf(+b.getAttribute('data-team')) !== -1; b.classList.toggle('on', on); b.textContent = (on ? T('★ Following') : T('☆ Follow')) + (b.closest('.mh-follow') ? ' ' + b.getAttribute('data-name') : ''); });
   }
   function orderPinned() {
     var p = pins().map(function (x) { return x.id; });
+    var tm = teams().map(function (x) { return x.id; });
+    $$('.mrow').forEach(function (r) { r.classList.toggle('mine', tm.indexOf(+r.getAttribute('data-h')) !== -1 || tm.indexOf(+r.getAttribute('data-a')) !== -1); });
+    $$('.mlist').forEach(function (list) { // leagues with a followed team's match come first, then pinned leagues above them
+      var mine = $$('section.lg', list).filter(function (s) { return s.querySelector('.mrow.mine'); });
+      mine.slice().reverse().forEach(function (s) { if (s !== list.firstElementChild) list.insertBefore(s, list.firstElementChild); });
+    });
     $$('.mlist').forEach(function (list) {
       var first = list.firstElementChild;
       p.slice().reverse().forEach(function (id) { var s = $('section.lg[data-lg="' + id + '"]', list); if (s && s !== list.firstElementChild) list.insertBefore(s, list.firstElementChild); });
@@ -76,8 +86,8 @@
   function paintSidebars() {
     var pl = $('#pinned'), ml = $('#myteams');
     var sport = CFG.sport || 'football';
-    if (pl) { var p = pins(); pl.innerHTML = p.length ? p.map(function (x) { return '<li><a href="' + esc(x.href) + '"><span>' + esc(x.name) + '</span></a></li>'; }).join('') : '<li class="muted small">Tap ☆ next to a league to pin it here.</li>'; }
-    if (ml) { var t = teams(); ml.innerHTML = t.length ? t.map(function (x) { return '<li><a href="/team/' + esc(x.slug || 'x') + '/' + x.id + '/"><span>' + esc(x.name) + '</span></a></li>'; }).join('') : '<li class="muted small">Follow teams with ☆ — they appear here.</li>'; }
+    if (pl) { var p = pins(); pl.innerHTML = p.length ? p.map(function (x) { return '<li><a href="' + esc(lp(x.href)) + '"><span>' + esc(x.name) + '</span></a></li>'; }).join('') : '<li class="muted small">' + T('Tap ☆ next to a league to pin it here.') + '</li>'; }
+    if (ml) { var t = teams(); ml.innerHTML = t.length ? t.map(function (x) { return '<li><a href="' + lp('/team/' + esc(x.slug || 'x') + '/' + x.id + '/') + '"><span>' + esc(x.name) + '</span></a></li>'; }).join('') : '<li class="muted small">' + T('Follow teams with ☆ — they appear here.') + '</li>'; }
     void sport;
   }
   function togglePin(el) {
@@ -104,7 +114,7 @@
   function paintFavTeams() {
     var box = $('#favTeams'); if (!box) return;
     var t = teams();
-    box.innerHTML = t.length ? '<b>Teams I follow</b><ul class="chips">' + t.map(function (x) { return '<li><a href="/team/' + esc(x.slug || 'x') + '/' + x.id + '/">' + esc(x.name) + '</a><button type="button" data-unfollow="' + x.id + '" aria-label="Unfollow ' + esc(x.name) + '">×</button></li>'; }).join('') + '</ul>' : '<span class="muted">No teams yet.</span>';
+    box.innerHTML = t.length ? '<b>' + T('Teams I follow') + '</b><ul class="chips">' + t.map(function (x) { return '<li><a href="' + lp('/team/' + esc(x.slug || 'x') + '/' + x.id + '/') + '">' + esc(x.name) + '</a><button type="button" data-unfollow="' + x.id + '" aria-label="' + T('Unfollow') + ' ' + esc(x.name) + '">×</button></li>'; }).join('') + '</ul>' : '<span class="muted">' + T('No teams yet.') + '</span>';
     var fa = $('#favAlerts'); if (fa) fa.checked = alertsOn();
   }
   function checkImport() {
@@ -117,7 +127,7 @@
       if (!list.length) return;
       box.hidden = false;
       box.innerHTML = '<b>Add ' + list.length + ' team' + (list.length === 1 ? '' : 's') + ' from this link?</b><p class="muted">' + list.map(function (x) { return esc(x.name); }).join(', ') + '</p><button class="btn" id="doImport" type="button">Add to my teams</button>';
-      $('#doImport').onclick = function () { var cur = teams(); list.forEach(function (x) { if (!cur.some(function (c) { return c.id === x.id; })) cur.push({ id: x.id, name: x.name, slug: x.slug }); }); lsSet('lsn_teams', cur); box.hidden = true; paintStars(); paintSidebars(); paintFavTeams(); loadFavorites(); toast('Teams added'); };
+      $('#doImport').onclick = function () { var cur = teams(); list.forEach(function (x) { if (!cur.some(function (c) { return c.id === x.id; })) cur.push({ id: x.id, name: x.name, slug: x.slug }); }); lsSet('lsn_teams', cur); box.hidden = true; paintStars(); paintSidebars(); paintFavTeams(); loadFavorites(); toast(T('Teams added')); };
     }).catch(function () {});
   }
 
@@ -141,7 +151,7 @@
     lsSet('lsn_alerts', !!on);
     $$('#setAlerts,#favAlerts').forEach(function (c) { c.checked = !!on; });
     if (on && 'Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch (e) { /* ignore */ } }
-    if (on) toast('Alerts on for the teams you follow' + ((window.Notification && Notification.permission === 'denied') ? ' (notifications are blocked in your browser; you will see in-page alerts only)' : ''));
+    if (on) toast(T('Alerts on for the teams you follow') + ((window.Notification && Notification.permission === 'denied') ? ' (notifications are blocked in your browser; you will see in-page alerts only)' : ''));
   }
   function seedStates() { $$('.mrow').forEach(function (r) { var sh = $('.sh', r), sa = $('.sa', r); lastState[r.getAttribute('data-id')] = { st: r.getAttribute('data-st'), hs: sh && sh.textContent !== '' ? +sh.textContent : null, as: sa && sa.textContent !== '' ? +sa.textContent : null }; }); }
   function checkAlerts(d) {
@@ -160,7 +170,7 @@
   function loadFavorites() {
     var box = $('#favList'); if (!box) return;
     var ids = teams().map(function (t) { return t.id; }).join(',');
-    H.fetchText('/frag/favorites/?teams=' + ids).then(function (html) { box.innerHTML = html; afterContent(box); }).catch(function () {});
+    H.fetchText(lp('/frag/favorites/?teams=' + ids)).then(function (html) { box.innerHTML = html; afterContent(box); }).catch(function () {});
   }
 
   /* ---------- live patching ---------- */
@@ -208,7 +218,7 @@
   }
   function patchOdds(row, it) {
     var box = $('.mr-odds', row); if (!box) return;
-    if (it.none) { if (!box.classList.contains('none')) { box.className = 'mr-odds none'; box.innerHTML = '<span class="odds-soon">' + (row.getAttribute('data-st') === 'sch' ? 'Odds soon' : 'No live odds') + '</span>'; delete box.__t; row.removeAttribute('data-odds'); } return; }
+    if (it.none) { if (!box.classList.contains('none')) { box.className = 'mr-odds none'; box.innerHTML = '<span class="odds-soon">' + (row.getAttribute('data-st') === 'sch' ? T('Odds soon') : T('No live odds')) + '</span>'; delete box.__t; row.removeAttribute('data-odds'); } return; }
     var cur = $$('a.odd', box);
     if (!box.classList.contains('none') && String(box.getAttribute('data-bk')) === String(it.bk) && cur.length === it.cells.length) {
       it.cells.forEach(function (c, i) {
@@ -296,7 +306,7 @@
     if (b) b.innerHTML = 'LIVE' + (live ? ' <em>' + live + '</em>' : '');
     var any = $$('section.lg', list).some(function (s) { return s.style.display !== 'none'; });
     var e = $('#noMatch', list);
-    if (!any && filter !== 'all') { if (!e) { e = document.createElement('div'); e.id = 'noMatch'; e.className = 'empty'; e.textContent = 'No matches in this view.'; list.appendChild(e); } } else if (e) e.remove();
+    if (!any && filter !== 'all') { if (!e) { e = document.createElement('div'); e.id = 'noMatch'; e.className = 'empty'; e.textContent = T('No matches in this view.'); list.appendChild(e); } } else if (e) e.remove();
   }
 
   /* ---------- match page tabs ---------- */
@@ -323,7 +333,20 @@
     $$('script', holder).forEach(function (old) { var s = document.createElement('script'); Array.prototype.forEach.call(old.attributes, function (a) { s.setAttribute(a.name, a.value); }); s.text = old.text; old.replaceWith(s); });
     ad.appendChild(holder);
   }
+  // Phones: show each operator's ad only once on the whole page (first one wins; later repeats are removed)
+  function onePerOperator() {
+    if (!window.matchMedia || !matchMedia('(max-width:820px) and (pointer:coarse)').matches) return;
+    var seen = {};
+    $$('.ad [data-op], .ad[data-op]').forEach(function (el) {
+      var k = el.getAttribute('data-op'); if (!k) return;
+      if (!seen[k]) { seen[k] = 1; return; }
+      var ad = el.classList.contains('ad') ? el : el.closest('.ad');
+      if (el.classList.contains('hb-i') && ad && $$('.hb-i', ad).length > 1) el.remove();
+      else if (ad) ad.remove(); else el.remove();
+    });
+  }
   function loadAds(root) {
+    onePerOperator();
     var ads = $$('.ad[data-slot]', root).filter(function (a) { return $('template.ad-code', a); });
     if (!ads.length) return;
     if (!('IntersectionObserver' in window)) { ads.forEach(runAd); return; }
@@ -355,8 +378,8 @@
       H.fetchJSON('/api/search?q=' + encodeURIComponent(q)).then(function (r) {
         if (seq !== suggSeq) return;
         var h = '';
-        if (r.leagues.length) h += '<h6>Competitions</h6>' + r.leagues.map(function (l) { return '<a href="/' + l.sport + '/' + l.country.slug + '/' + l.slug + '/"><b>' + esc(l.name) + '</b><small>' + esc(l.country.name) + '</small></a>'; }).join('');
-        if (r.teams.length) h += '<h6>Teams</h6>' + r.teams.map(function (t) { return '<a href="/team/' + t.slug + '/' + t.id + '/"><b>' + esc(t.name) + '</b><small>' + esc(t.sport) + '</small></a>'; }).join('');
+        if (r.leagues.length) h += '<h6>' + T('Competitions') + '</h6>' + r.leagues.map(function (l) { return '<a href="' + lp('/' + l.sport + '/' + l.country.slug + '/' + l.slug + '/') + '"><b>' + esc(l.name) + '</b><small>' + esc(l.country.name) + '</small></a>'; }).join('');
+        if (r.teams.length) h += '<h6>' + T('Teams') + '</h6>' + r.teams.map(function (t) { return '<a href="' + lp('/team/' + t.slug + '/' + t.id + '/') + '"><b>' + esc(t.name) + '</b><small>' + esc(t.sport) + '</small></a>'; }).join('');
         box.innerHTML = h || '<a href="#"><small>No results</small></a>'; box.hidden = false;
       }).catch(function () {});
     }, 180);
@@ -380,7 +403,7 @@
       if ((el = t.closest('#filters button'))) { filter = el.getAttribute('data-f'); $$('#filters button').forEach(function (b) { b.classList.toggle('on', b === el); }); applyFilter(); return; }
       if ((el = t.closest('#mtabs a'))) { e.preventDefault(); setTab(el.getAttribute('data-tab')); return; }
       if ((el = t.closest('[data-unfollow]'))) { var uid = +el.getAttribute('data-unfollow'); lsSet('lsn_teams', teams().filter(function (x) { return x.id !== uid; })); paintStars(); paintSidebars(); paintFavTeams(); loadFavorites(); return; }
-      if (t.closest('#shareBtn')) { var ids = teams().map(function (x) { return x.id; }).join(','); if (!ids) { var sm = $('#shareMsg'); if (sm) sm.textContent = 'Follow a team first.'; return; } var link = H.shareUrl(ids); var done = function () { var sm = $('#shareMsg'); if (sm) sm.textContent = 'Link copied — open it on your other device and tap “Add to my teams”.'; }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, function () { window.prompt('Copy this link:', link); }); else window.prompt('Copy this link:', link); return; }
+      if (t.closest('#shareBtn')) { var ids = teams().map(function (x) { return x.id; }).join(','); if (!ids) { var sm = $('#shareMsg'); if (sm) sm.textContent = T('Follow a team first.'); return; } var link = H.shareUrl(ids); var done = function () { var sm = $('#shareMsg'); if (sm) sm.textContent = T('Link copied — open it on your other device and tap “Add to my teams”.'); }; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, function () { window.prompt(T('Copy this link:'), link); }); else window.prompt(T('Copy this link:'), link); return; }
       if (t.closest('#setBtn')) { openSettings(); return; }
       if (t.closest('#menuBtn')) { var cl = $('.col-left'); if (cl) cl.classList.toggle('open'); return; }
       if (t.closest('#searchBtn')) { var s = $('.search'); if (s) { s.classList.toggle('open'); var i = $('#q'); if (i) i.focus(); } return; }
@@ -418,6 +441,7 @@
       if (dz) { setCookie('lsn_tz', dz); if (dz !== CFG.siteTz && !LSN.preview) { try { if (!sessionStorage.getItem('lsn_tzr')) { sessionStorage.setItem('lsn_tzr', '1'); location.reload(); return; } } catch (e) { /* ignore */ } } }
     }
     if (CFG.page === 'match') setTab(LSN.preview ? 'summary' : (location.hash || '').slice(1) || 'summary', true);
+    $$('.langbar a,.langbar button').forEach(function (el) { el.addEventListener('click', function () { setCookie('lsn_langno', '1', 365); var b = el.closest('.langbar'); if (el.tagName === 'BUTTON' && b) b.remove(); }); });
     paintSidebars(); afterContent(document);
     seedStates();
     if (CFG.page === 'favorites') { paintFavTeams(); checkImport(); loadFavorites(); }

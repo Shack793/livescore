@@ -114,7 +114,10 @@ test('search output is HTML-escaped (XSS)', async () => {
 });
 
 test('sitemap, robots, healthz, static assets and path traversal', async () => {
-  assert.match((await get('/sitemap.xml')).text, /<urlset[\s\S]+premier-league/);
+  assert.match((await get('/sitemap-en.xml')).text, /<urlset[\s\S]+premier-league/);
+  const sm = (await get('/sitemap-en.xml')).text;
+  assert.match(sm, /\/team\/[a-z0-9-]+\/\d+\//, 'team pages are in the sitemap');
+  assert.match(sm, /<loc>[^<]*\/football\/[a-z0-9-]+\/<\/loc>/, 'country pages are in the sitemap');
   assert.match((await get('/robots.txt')).text, /Disallow: \/go\//);
   assert.strictEqual(JSON.parse((await get('/healthz')).text).ok, true);
   assert.strictEqual((await get('/assets/style.css')).status, 200);

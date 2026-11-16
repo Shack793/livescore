@@ -159,11 +159,11 @@
     var horizontal = !s.height || s.height <= 120 || s.placement === 'infeed';
     if (horizontal) {
       var b = all[used]; ctx._house = used + 1;
-      return '<div class="house h" data-ad-house="1">' + bkChip(b) + '<div class="hb-t"><b>' + E(b.name) + '</b><span>' + E(b.offer || 'Bet on today’s matches') + '</span></div>' + cta(b, matchId, 'banner-' + s.slot_key, 'Bet now') + '<small>Ad · ' + ctx.bk.compliance.min_age + '+ · T&amp;Cs apply</small></div>';
+      return '<div class="house h" data-ad-house="1" data-op="b' + E(b.id) + '">' + bkChip(b) + '<div class="hb-t"><b>' + E(b.name) + '</b><span>' + E(b.offer || 'Bet on today’s matches') + '</span></div>' + cta(b, matchId, 'banner-' + s.slot_key, 'Bet now') + '<small>Ad · ' + ctx.bk.compliance.min_age + '+ · T&amp;Cs apply</small></div>';
     }
     var items = all.slice(used, used + (s.height >= 250 ? 3 : 2)); ctx._house = used + items.length;
     return '<div class="house v' + (s.width && s.width <= 200 ? ' narrow' : '') + '" data-ad-house="1"><div class="hb-h">More offers in ' + E(ctx.countryName) + '</div>' +
-      items.map(function (b) { return '<div class="hb-i">' + bkChip(b) + '<div class="hb-t"><b>' + E(b.name) + '</b><span>' + E(b.offer || '') + '</span></div>' + cta(b, matchId, 'banner-' + s.slot_key, 'Bet now') + '</div>'; }).join('') +
+      items.map(function (b) { return '<div class="hb-i" data-op="b' + E(b.id) + '">' + bkChip(b) + '<div class="hb-t"><b>' + E(b.name) + '</b><span>' + E(b.offer || '') + '</span></div>' + cta(b, matchId, 'banner-' + s.slot_key, 'Bet now') + '</div>'; }).join('') +
       '<small>Ad · ' + ctx.bk.compliance.min_age + '+ · T&amp;Cs apply</small></div>';
   }
 
@@ -185,6 +185,8 @@
     });
     return best;
   }
+  // Operator key of an image ad = its destination site, so the phone view can keep one ad per operator
+  function opAttr(u) { var m = /^https?:\/\/(?:www\.)?([^\/?#:]+)/i.exec(String(u || '').trim()); return m ? ' data-op="h' + E(m[1].toLowerCase()) + '"' : ''; }
   function creativeHtml(c) {
     if (c.ad_code) return { code: c.ad_code, fallback: c.fallback_code || '' };
     var iu = String(c.image_url || '').trim(), img = /^\/assets\/[A-Za-z0-9_\-\/.]+$/.test(iu) && iu.indexOf('..') < 0 ? iu : safeUrl(iu), link = safeUrl(c.link_url);
@@ -205,7 +207,7 @@
       if (h) {
         if (cr.id) (ctx.adsShown = ctx.adsShown || []).push(Number(cr.id));
         s = Object.assign({}, s, { ad_code: h.code, fallback_code: h.plain || h.fallback });
-        if (h.plain) { return '<div class="ad ad-' + E(s.placement) + (h.mob ? ' ad-m' : '') + '" data-slot="' + E(s.slot_key) + '" data-creative="' + (Number(cr.id) || 0) + '" style="' + (s.width ? 'max-width:' + s.width + 'px' : '') + '"><span class="ad-lab">Advertisement</span>' + h.plain + '</div>'; }
+        if (h.plain) { return '<div class="ad ad-' + E(s.placement) + (h.mob ? ' ad-m' : '') + '" data-slot="' + E(s.slot_key) + '" data-creative="' + (Number(cr.id) || 0) + '"' + opAttr(cr.link_url) + ' style="' + (s.width ? 'max-width:' + s.width + 'px' : '') + '"><span class="ad-lab">Advertisement</span>' + h.plain + '</div>'; }
       }
     }
     var size = '', inner = '';
@@ -337,6 +339,7 @@
       (ctx.bettingOn ? '<div class="rg"><span class="age">' + c.min_age + '+</span><p>' + E(c.rg_text) + (c.rg_url ? ' <a href="' + E(c.rg_url) + '" target="_blank" rel="noopener">Get help</a>' : '') + (c.license_text ? ' ' + E(c.license_text) : '') + '</p></div>' : '') +
       '<div class="cols"><div><h5>Sports</h5>' + ctx.sports.map(function (s) { return '<a href="' + sportUrl(s.id) + '">' + E(s.name) + '</a>'; }).join('') + '</div>' +
       '<div><h5>' + E(ctx.siteName) + '</h5><a href="/about/">About</a><a href="/contact/">Contact</a><a href="/advertise/">Advertise</a><a href="/favorites/">My teams</a>' + (ctx.forumUrl ? '<a href="' + E(ctx.forumUrl) + '">' + E(ctx.forumName) + '</a>' : '') + '</div>' +
+      (ctx.langs && ctx.langs.length ? '<div class="langs"><h5>Language</h5><a data-nolang hreflang="en" href="' + E(ctx.path) + '"' + (!ctx.lang ? ' aria-current="true"' : '') + '>English</a>' + ctx.langs.map(function (l) { return '<a data-nolang hreflang="' + E(l.hreflang) + '" href="/' + l.code + E(ctx.path) + '"' + (ctx.lang === l.code ? ' aria-current="true"' : '') + '>' + E(l.name) + '</a>'; }).join('') + '</div>' : '') +
       '<div><h5>Legal</h5><a href="/terms/">Terms of use</a><a href="/privacy/">Privacy policy</a><a href="/cookies/">Cookies</a><a href="/responsible-gambling/">Responsible gambling</a></div></div>' +
       '<p class="disc">' + E(ctx.siteName) + ' provides scores and statistics for information only. Some links on this site are affiliate links: we may earn a commission if you sign up with a bookmaker, at no cost to you. Odds are indicative and may change; always check the bookmaker’s site. Betting is for adults only and may be restricted where you live.</p>' +
       '<p class="disc">Bookmakers shown are chosen for your region (' + E(ctx.countryName) + '). <a href="https://db-ip.com" target="_blank" rel="noopener">IP Geolocation by DB-IP</a> · © ' + new Date(ctx.now * 1000).getUTCFullYear() + ' ' + E(ctx.siteName) + '</p>' +
@@ -387,6 +390,14 @@
     return out.map(function (j) { return '<script type="application/ld+json">' + JSON.stringify(j).replace(/</g, '\\u003c') + '</script>'; }).join('');
   }
 
+  // tells Google which address is the same page in which language
+  function hreflangs(ctx, page) {
+    if (!ctx.langs || !ctx.langs.length || page.noindex || /^\/(terms|privacy|cookies)\/?$/.test(ctx.path)) return '';
+    var path = page.canonical || ctx.path, base = ctx.siteUrl;
+    return '<link rel="alternate" hreflang="en" href="' + E(base + path) + '"><link rel="alternate" hreflang="x-default" href="' + E(base + path) + '">' +
+      ctx.langs.map(function (l) { return '<link rel="alternate" hreflang="' + E(l.hreflang) + '" href="' + E(base + '/' + l.code + path) + '">'; }).join('');
+  }
+
   function document_(ctx, page) {
     if (page.embed) return embedDoc(ctx, page);
     var title = page.title ? page.title + ' | ' + ctx.siteName : ctx.siteName + ' – ' + ctx.tagline;
@@ -394,8 +405,8 @@
     return '<!doctype html><html lang="en" data-theme="' + E(ctx.theme) + '" class="no-js"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
       '<title>' + E(title) + '</title><meta name="description" content="' + E(page.description || ctx.tagline) + '">' +
       (page.noindex ? '<meta name="robots" content="noindex,follow">' : '') +
-      '<link rel="canonical" href="' + E(canon) + '"><meta name="theme-color" content="#0b1f33">' +
-      '<meta property="og:title" content="' + E(title) + '"><meta property="og:description" content="' + E(page.description || ctx.tagline) + '"><meta property="og:type" content="website"><meta property="og:url" content="' + E(canon) + '"><meta property="og:site_name" content="' + E(ctx.siteName) + '">' +
+      '<link rel="canonical" href="' + E(canon) + '">' + hreflangs(ctx, page) + '<meta name="theme-color" content="#0b1f33">' +
+      '<meta property="og:title" content="' + E(title) + '"><meta property="og:description" content="' + E(page.description || ctx.tagline) + '"><meta property="og:locale" content="en_GB"><meta property="og:type" content="website"><meta property="og:url" content="' + E(canon) + '"><meta property="og:site_name" content="' + E(ctx.siteName) + '">' +
       '<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/assets/favicon.svg" type="image/svg+xml"><link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png"><link rel="alternate icon" href="/assets/favicon.ico" sizes="any"><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png"><meta property="og:image" content="' + E(ctx.siteUrl) + '/assets/og-image.png"><meta name="twitter:card" content="summary_large_image">' +
       '<script>document.documentElement.className="js";</script>' +
       '<link rel="stylesheet" href="/assets/style.css?v=' + E(ctx.assetV) + '">' +

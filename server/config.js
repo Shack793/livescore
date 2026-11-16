@@ -89,8 +89,9 @@ function load(root, overrides) {
     trustProxy: bool(e.TRUST_PROXY, false),
     allowCcQuery: bool(e.ALLOW_CC_QUERY, (e.NODE_ENV || 'development') !== 'production'),
     contactEmail: e.CONTACT_EMAIL || '',
-    // Sister community site (Pitchside Forum). Empty = no forum links are shown.
-    forumUrl: (e.FORUM_URL || '').replace(/\/+$/, ''),
+    // Sister community site (Pitchside Forum). Defaults to pitchsideforum.com; set FORUM_URL=off to hide the links.
+    forumUrl: (/^(off|none|false|0)$/i.test(String(e.FORUM_URL || '').trim()) ? '' : (e.FORUM_URL === undefined || e.FORUM_URL === '' ? 'https://pitchsideforum.com' : e.FORUM_URL)).replace(/\/+$/, ''),
+    languages: bool(e.LANGUAGES, true),   // translated copies of the site under /es/ /pt/ /ar/ /zh/ /ko/ /ja/ (set LANGUAGES=off to switch them off)
     forumName: e.FORUM_NAME || 'Pitchside Forum',
     forumMatchUrl: e.FORUM_MATCH_URL || '',   // optional template, e.g. https://forum.com/search?q={query}  ({home} {away} {league} {query})
     // Origins allowed to put /embed/* widgets in an iframe (space/comma separated). Defaults to the forum's origin.

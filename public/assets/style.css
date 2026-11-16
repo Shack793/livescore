@@ -381,3 +381,32 @@ body{overflow-x:hidden;overflow-x:clip;max-width:100%;position:relative}
 :root[data-theme="dark"] .strip-note{color:#ffd48a;background:#2e2308;border-color:#6b4f12}
 @media (prefers-color-scheme:dark){:root[data-theme=auto] .otag{color:#ffd48a;background:#3a2b0a;border-color:#6b4f12}:root[data-theme=auto] .strip-note{color:#ffd48a;background:#2e2308;border-color:#6b4f12}}
 .ad-infeed{margin-left:auto;margin-right:auto}
+.mrow.mine{background:rgba(245,166,35,.08);box-shadow:inset 3px 0 0 #f5a623}
+.foot .langs a{display:block}.foot .langs a[aria-current]{color:#fff;font-weight:700}
+/* translated versions: fonts for Chinese, Japanese, Korean and Arabic; mirrored layout for Arabic (right-to-left) */
+html:lang(zh) body,html:lang(zh) button,html:lang(zh) input,html:lang(zh) select{font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans CJK SC","Noto Sans SC",sans-serif}
+html:lang(ja) body,html:lang(ja) button,html:lang(ja) input,html:lang(ja) select{font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic","Meiryo","Noto Sans CJK JP","Noto Sans JP",sans-serif}
+html:lang(ko) body,html:lang(ko) button,html:lang(ko) input,html:lang(ko) select{font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans CJK KR","Noto Sans KR",sans-serif}
+html:lang(ar) body,html:lang(ar) button,html:lang(ar) input,html:lang(ar) select{font-family:system-ui,-apple-system,"Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif}
+html[dir=rtl] .search{margin-left:0;margin-right:8px}
+html[dir=rtl] .search button{right:auto;left:4px}
+html[dir=rtl] .sugg small,html[dir=rtl] .links small,html[dir=rtl] .top-actions,html[dir=rtl] .tree summary::after,html[dir=rtl] .ph .pin.big,html[dir=rtl] .ph .follow,html[dir=rtl] .cards small,html[dir=rtl] .lg-links,html[dir=rtl] .mr-odds,html[dir=rtl] .stab.forum,html[dir=rtl] .forum-btn,html[dir=rtl] .cont>summary::after,html[dir=rtl] .tree summary small{margin-left:0;margin-right:auto}
+html[dir=rtl] .cards small,html[dir=rtl] .mr-score .sc,html[dir=rtl] .mh-goals .gh,html[dir=rtl] .events .ev.a,html[dir=rtl] .lu .no,html[dir=rtl] .h2r .hm{text-align:left}
+html[dir=rtl] .std .c-team,html[dir=rtl] .squad th,html[dir=rtl] .squad td,html[dir=rtl] .mh-goals .ga,html[dir=rtl] .oddstbl .bkn{text-align:right}
+html[dir=rtl] .pop{right:auto;left:12px}
+html[dir=rtl] .ad-lab{left:auto;right:0}
+html[dir=rtl] #toasts{right:auto;left:12px}
+html[dir=rtl] .morepanel{left:auto;right:0}
+html[dir=rtl] .mrow.mine{box-shadow:inset -3px 0 0 #f5a623}
+html[dir=rtl] .sugg{left:0;right:0}
+@media (max-width:820px){html[dir=rtl] .col-left{inset:54px 0 0 auto;transform:translateX(105%)}html[dir=rtl] .col-left.open,html[dir=rtl] body.menu-open .col-left{transform:none}}
+html[dir=rtl] .logo,html[dir=rtl] .emb-logo{direction:ltr;unicode-bidi:isolate}
+html:not([lang=en]) .links small,html:not([lang=en]) .cards small{white-space:nowrap;flex:none}
+/* more languages */
+html:lang(hi) body,html:lang(hi) button,html:lang(hi) input,html:lang(hi) select{font-family:system-ui,-apple-system,"Nirmala UI","Mangal","Noto Sans Devanagari",sans-serif}
+html:lang(bn) body,html:lang(bn) button,html:lang(bn) input,html:lang(bn) select{font-family:system-ui,-apple-system,"Nirmala UI","Vrinda","Noto Sans Bengali",sans-serif}
+html:lang(ur) body,html:lang(ur) button,html:lang(ur) input,html:lang(ur) select{font-family:system-ui,-apple-system,"Noto Nastaliq Urdu","Segoe UI",Tahoma,"Noto Naskh Arabic",sans-serif;line-height:1.7}
+.foot .langs{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px 18px}.foot .langs h5{width:100%}.foot .langs a{display:inline-block}
+.langbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 12px;padding:8px 12px;background:var(--head);color:#fff;font-size:13px}
+.langbar .lb-yes{background:var(--accent);color:#fff;border-radius:999px;padding:5px 14px;font-weight:700}
+.langbar .lb-no{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:999px;padding:4px 12px;cursor:pointer}

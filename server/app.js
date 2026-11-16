@@ -16,7 +16,8 @@ const BOT = /bot|crawl|spider|slurp|preview|facebookexternalhit|monitor|headless
 function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
   const pub = path.join(cfg.root, 'public');
   const assetV = (() => { try { return ['app.js', 'style.css'].map((f) => Math.floor(fs.statSync(path.join(pub, 'assets', f)).mtimeMs / 1000).toString(36)).join(''); } catch (e) { return '1'; } })();
-  const pageCfg = { siteName: cfg.siteName, siteUrl: cfg.siteUrl, siteTz: cfg.siteTz, assetV, contactEmail: cfg.contactEmail, forumUrl: cfg.forumUrl, forumName: cfg.forumName, forumMatchUrl: cfg.forumMatchUrl };
+  const i18n = require('./i18n');
+  const pageCfg = { langs: cfg.languages ? i18n.LANGS.map((l) => ({ code: l.code, name: l.name, hreflang: l.hreflang })) : [], siteName: cfg.siteName, siteUrl: cfg.siteUrl, siteTz: cfg.siteTz, assetV, contactEmail: cfg.contactEmail, forumUrl: cfg.forumUrl, forumName: cfg.forumName, forumMatchUrl: cfg.forumMatchUrl };
   const bkCache = http.makeCache(400);
   const goLimit = http.makeLimiter(90, 60000);
   const apiLimit = http.makeLimiter(cfg.apiRatePerMin, 60000);
@@ -66,12 +67,21 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
     http.redirect(res, dest || '/', 302, { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
   }
 
-  function sitemap() {
-    const { leagues } = store.allForSitemap(), base = cfg.siteUrl, urls = ['/'];
+  // /sitemap.xml lists one sitemap per language (English plus each translated copy), so each file stays far below the 50,000-address limit
+  function sitemapIndex() {
+    const codes = ['en'].concat(cfg.languages ? i18n.CODES : []);
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + codes.map((c) => '<sitemap><loc>' + U.esc(cfg.siteUrl + '/sitemap-' + c + '.xml') + '</loc></sitemap>').join('') + '</sitemapindex>';
+  }
+  function sitemap(lang) {
+    const { leagues, teams } = store.allForSitemap(), base = cfg.siteUrl, urls = ['/'], seenC = {};
     store.sports().forEach((s) => { if (s.id !== 'football') urls.push('/' + s.id + '/'); });
+    leagues.forEach((l) => { const k = l.sport + '/' + l.cslug; if (!seenC[k]) { seenC[k] = 1; urls.push('/' + k + '/'); } });
     leagues.forEach((l) => { urls.push('/' + l.sport + '/' + l.cslug + '/' + l.slug + '/'); urls.push('/' + l.sport + '/' + l.cslug + '/' + l.slug + '/standings/'); });
-    ['about', 'contact', 'advertise', 'terms', 'privacy', 'cookies', 'responsible-gambling'].forEach((p) => urls.push('/' + p + '/'));
-    return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls.map((u) => '<url><loc>' + U.esc(base + u) + '</loc></url>').join('') + '</urlset>';
+    (teams || []).forEach((t) => { if (t.slug) urls.push('/team/' + t.slug + '/' + t.id + '/'); });
+    // the legal pages are only written in English, so the translated copies are left out (and marked noindex)
+    ['about', 'contact', 'advertise', 'responsible-gambling'].concat(lang ? [] : ['terms', 'privacy', 'cookies']).forEach((pg) => urls.push('/' + pg + '/'));
+    const pre = lang ? '/' + lang : '';
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + urls.map((u) => '<url><loc>' + U.esc(base + (lang && u === '/' ? pre + '/' : pre + u)) + '</loc></url>').join('') + '</urlset>';
   }
 
   // which league's standings does this URL need? (league standings tab, or a match page)
@@ -83,7 +93,7 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
     return 0;
   }
 
-  async function renderPage(req, res, url) {
+  async function renderPage(req, res, url, lang) {
     const g = geo(req, url), ck = http.parseCookies(req);
     const parts = url.pathname.split('/').filter(Boolean);
     try {
@@ -94,9 +104,9 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
     } catch (e) { /* page still renders with whatever is cached */ }
     const query = {};
     url.searchParams.forEach((v, k) => { if (!(k in query)) query[k] = v; });
-    const out = pages.handle(store, { path: url.pathname, query, cookies: ck, cc: g.code, ccSource: g.source, countryName: nameOf(g.code), now: Math.floor(Date.now() / 1000), cfg: pageCfg, needConsent: consent.has(g.code), streamOn: cfg.syncEnabled });
-    if (out.redirect) return http.redirect(res, out.redirect + (url.search && !out.redirect.includes('?') ? url.search : ''), out.status || 301);
-    if (out.fragment != null) return http.send(req, res, 200, out.fragment, Object.assign({ 'Content-Type': 'text/html; charset=utf-8' }, NOCACHE));
+    const out = pages.handle(store, { path: url.pathname, query, cookies: ck, cc: g.code, ccSource: g.source, countryName: nameOf(g.code), now: Math.floor(Date.now() / 1000), cfg: pageCfg, lang: lang || '', needConsent: consent.has(g.code), streamOn: cfg.syncEnabled });
+    if (out.redirect) return http.redirect(res, (lang ? '/' + lang : '') + out.redirect + (url.search && !out.redirect.includes('?') ? url.search : ''), out.status || 301);
+    if (out.fragment != null) return http.send(req, res, 200, lang ? i18n.localize(out.fragment, lang, {}) : out.fragment, Object.assign({ 'Content-Type': 'text/html; charset=utf-8' }, NOCACHE));
     const hdr = Object.assign({ 'Content-Type': 'text/html; charset=utf-8' }, NOCACHE);
     if (out.page && out.page.embed) { // widgets may be framed only by the origins you list (default: the forum)
       const allow = cfg.embedOrigins.concat(cfg.forumUrl ? [new URL(cfg.forumUrl).origin] : []);
@@ -105,12 +115,23 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
     }
     if (out.status === 200 && req.method === 'GET' && out.ctx && out.ctx.adsShown) analytics.recordAds(req, out.ctx.adsShown, g.code);
     if (out.status === 200 && req.method === 'GET' && !(out.page && out.page.embed)) analytics.record(req, url.pathname, g.code, http.clientIp(req, cfg.trustProxy));
-    http.send(req, res, out.status, out.html, hdr);
+    let body = lang && !(out.page && out.page.embed) ? i18n.localize(out.html, lang, { siteUrl: cfg.siteUrl, path: url.pathname }) : out.html;
+    if (!lang && cfg.languages && out.status === 200 && req.method === 'GET' && !(out.page && out.page.embed) && ck.lsn_langno !== '1' && !/bot|crawl|spider|slurp|preview/i.test(req.headers['user-agent'] || '')) {
+      const want = i18n.suggest(req.headers['accept-language'], g.code);
+      if (want) body = body.replace(/(<body[^>]*>)/, '$1' + i18n.bar(want, url.pathname + url.search));
+    }
+    http.send(req, res, out.status, body, hdr);
   }
 
   async function handler(req, res) {
     try {
       const url = new URL(req.url, 'http://x');
+      let lang = '';
+      const mLang = cfg.languages ? url.pathname.match(i18n.RX_PREFIX) : null;
+      if (mLang) {
+        if (!mLang[2]) return http.redirect(res, '/' + mLang[1] + '/' + url.search, 301);
+        lang = mLang[1]; url.pathname = mLang[2];
+      }
       const p = url.pathname;
       const ip = http.clientIp(req, cfg.trustProxy);
       if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'POST' && req.method !== 'PUT' && req.method !== 'DELETE') return http.send(req, res, 405, 'Method not allowed', { 'Content-Type': 'text/plain' });
@@ -123,8 +144,10 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
       if (p === '/favicon.ico') return http.redirect(res, '/assets/favicon.ico', 301);
       if (p === '/manifest.webmanifest') return http.send(req, res, 200, JSON.stringify({ name: cfg.siteName, short_name: cfg.siteName, start_url: '/', display: 'standalone', background_color: '#0b1f33', theme_color: '#0b1f33', icons: [{ src: '/assets/icon-192.png', sizes: '192x192', type: 'image/png' }, { src: '/assets/icon-512.png', sizes: '512x512', type: 'image/png' }, { src: '/assets/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }, { src: '/assets/favicon.svg', sizes: 'any', type: 'image/svg+xml' }] }), { 'Content-Type': 'application/manifest+json', 'Cache-Control': 'public, max-age=86400' });
       if (p === '/sw.js') { try { return http.send(req, res, 200, fs.readFileSync(path.join(pub, 'sw.js')), { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' }); } catch (e) { return http.send(req, res, 404, 'Not found', { 'Content-Type': 'text/plain' }); } }
-      if (p === '/robots.txt') return http.send(req, res, 200, 'User-agent: *\nDisallow: /go/\nDisallow: /admin\nDisallow: /api/\nDisallow: /search/\nSitemap: ' + cfg.siteUrl + '/sitemap.xml\n', { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
-      if (p === '/sitemap.xml') return http.send(req, res, 200, sitemap(), { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+      if (p === '/robots.txt') return http.send(req, res, 200, 'User-agent: *\nDisallow: /go/\nDisallow: /admin\nDisallow: /api/\nDisallow: /search/\n' + (cfg.languages ? i18n.CODES.map((c) => 'Disallow: /' + c + '/search/\n').join('') : '') + 'Sitemap: ' + cfg.siteUrl + '/sitemap.xml\n', { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+      if (p === '/sitemap.xml') return http.send(req, res, 200, sitemapIndex(), { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+      const mSm = p.match(/^\/sitemap-([a-z]{2})\.xml$/);
+      if (mSm && (mSm[1] === 'en' || (cfg.languages && i18n.CODES.indexOf(mSm[1]) >= 0))) return http.send(req, res, 200, sitemap(mSm[1] === 'en' ? '' : mSm[1]), { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
 
       if (p === '/admin' || p.startsWith('/admin/')) return adminApi.handle(req, res, url, ip);
 
@@ -159,7 +182,7 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
       }
 
       if (req.method !== 'GET' && req.method !== 'HEAD') return http.send(req, res, 405, 'Method not allowed', { 'Content-Type': 'text/plain' });
-      return await renderPage(req, res, url);
+      return await renderPage(req, res, url, lang);
     } catch (e) {
       log('request error: ' + (e && e.stack || e));
       if (!res.headersSent) http.send(req, res, 500, '<h1>Something went wrong</h1><p><a href="/">Back to LiveScoreNow</a></p>', { 'Content-Type': 'text/html; charset=utf-8' });
