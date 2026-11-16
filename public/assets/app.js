@@ -415,6 +415,7 @@
     document.addEventListener('change', function (e) {
       var t = e.target;
       if (t.id === 'setOdds') { setCookie('lsn_odds', t.value); CFG.odds = t.value; reformatOdds(document); }
+      else if (t.id === 'setLang') { setCookie('lsn_langno', '1'); location.href = t.value; }
       else if (t.id === 'setTheme') { setCookie('lsn_theme', t.value); document.documentElement.setAttribute('data-theme', t.value); }
       else if (t.id === 'setTz') { setCookie('lsn_tz', t.value); CFG.tz = t.value; localize(document); }
       else if (t.id === 'setAlerts' || t.id === 'favAlerts') setAlerts(t.checked);

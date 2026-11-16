@@ -109,7 +109,7 @@ test('SEO: sitemap index, per-language sitemaps, og:locale, legal copies noindex
     for (const c of ['en', 'es', 'ar', 'zh', 'ur']) assert.match(idx, new RegExp('/sitemap-' + c + '\\.xml'), c);
     const de = (await s.get('/sitemap-de.xml')).text;
     assert.match(de, /<loc>[^<]*\/de\/<\/loc>/);
-    assert.match(de, /\/de\/football\//);
+    assert.match(de, /\/de\/basketball\//);
     assert.doesNotMatch(de, /\/de\/(terms|privacy|cookies)\//);
     assert.doesNotMatch(de, /\/de\/de\//);
     assert.match((await s.get('/sitemap-en.xml')).text, /\/terms\//);
@@ -133,5 +133,16 @@ test('ads carry an operator key so phones can keep one ad per operator', async (
     const js = fs.readFileSync(path.join(__dirname, '../public/assets/app.js'), 'utf8');
     assert.match(js, /function onePerOperator/);
     assert.match(js, /max-width:820px\) and \(pointer:coarse/);
+  } finally { await s.close(); }
+});
+
+test('settings menu has a language picker that keeps the current page', async () => {
+  const s = await boot({});
+  try {
+    const en = (await s.get('/basketball/?cc=NL')).text;
+    assert.match(en, /id="setLang"[^>]*><option value="\/basketball\/" selected>English<\/option><option value="\/es\/basketball\/"/);
+    const de = (await s.get('/de/basketball/?cc=DE')).text;
+    assert.match(de, /<option value="\/de\/basketball\/" selected>Deutsch<\/option>/);
+    assert.doesNotMatch(de, /value="\/de\/de\//);
   } finally { await s.close(); }
 });

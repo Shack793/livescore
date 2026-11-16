@@ -257,6 +257,7 @@
       '<div class="pop" id="setPop" hidden><h4>Settings</h4>' +
         '<label>Odds format<select id="setOdds"><option value="decimal">Decimal (1.85)</option><option value="fractional">Fractional (17/20)</option><option value="american">American (-118)</option></select></label>' +
         '<label>Theme<select id="setTheme"><option value="auto">Match device</option><option value="light">Light</option><option value="dark">Dark</option></select></label>' +
+        (ctx.langs && ctx.langs.length ? '<label>Language<select id="setLang"><option value="' + E(ctx.path) + '"' + (!ctx.lang ? ' selected' : '') + '>English</option>' + ctx.langs.map(function (l) { return '<option value="/' + l.code + E(ctx.path) + '"' + (ctx.lang === l.code ? ' selected' : '') + '>' + E(l.name) + '</option>'; }).join('') + '</select></label>' : '') +
         '<label>Time zone<select id="setTz"></select></label><label class="chk"><input type="checkbox" id="setAlerts"> Alerts for my teams (goals, kick-off, full-time)</label></div>' +
       '</header>';
   }
