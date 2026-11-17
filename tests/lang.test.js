@@ -146,3 +146,12 @@ test('settings menu has a language picker that keeps the current page', async ()
     assert.doesNotMatch(de, /value="\/de\/de\//);
   } finally { await s.close(); }
 });
+
+test('Crypto.Games sidebar uses the official animated banner', async () => {
+  const s = await boot({});
+  try {
+    const h = (await s.get('/?cc=NL')).text;
+    assert.match(h, /src="\/assets\/ads\/cryptogames-300x250-anim\.webp"/);
+    assert.doesNotMatch((await s.get('/?cc=GB')).text, /cryptogames-\d+x\d+-anim/);
+  } finally { await s.close(); }
+});

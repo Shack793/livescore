@@ -63,8 +63,8 @@ const SLOT_PRESETS = [
 const IMG_ADS = [
   { slot_key: 'infeed2', name: 'CoinRoyale test banner A', image_url: '/assets/ads/coinroyale-320x100-a.png', link_url: 'https://coinroyale.com/', alt_text: 'CoinRoyale – Bitcoin casino and sportsbook' },
   { slot_key: 'sidebar-3', name: 'CoinRoyale test banner C (sidebar)', image_url: '/assets/ads/coinroyale-300x250-c.png', link_url: 'https://coinroyale.com/', alt_text: 'CoinRoyale – Bitcoin sportsbook and casino' },
-  { slot_key: 'infeed4', name: 'Crypto.Games test banner', image_url: '/assets/ads/cryptogames-320x100.png', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED },
-  { slot_key: 'sidebar-casino', name: 'Crypto.Games test banner (sidebar)', image_url: '/assets/ads/cryptogames-300x250.png', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED }
+  { slot_key: 'infeed4', name: 'Crypto.Games test banner', image_url: '/assets/ads/cryptogames-320x100-anim.webp', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED },
+  { slot_key: 'sidebar-casino', name: 'Crypto.Games test banner (sidebar)', image_url: '/assets/ads/cryptogames-300x250-anim.webp', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED }
 ];
 const norm = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -135,6 +135,12 @@ function install(db) {
     });
     db.run('INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)', k, '1');
   });
+  // One-time: both Crypto.Games banners become their official animated ones (files kept on this server).
+  if (getV(db, 'preset_cg_anim_webp') < 1) {
+    db.run("UPDATE ad_creatives SET image_url='/assets/ads/cryptogames-300x250-anim.webp' WHERE slot_key='sidebar-casino' AND name LIKE 'Crypto.Games test banner%' AND image_url<>''");
+    db.run("UPDATE ad_creatives SET image_url='/assets/ads/cryptogames-320x100-anim.webp' WHERE slot_key='infeed4' AND name LIKE 'Crypto.Games test banner%' AND image_url<>''");
+    db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('preset_cg_anim_webp','1')");
+  }
   // One-time: CoinRoyale keeps one in-feed banner (A); the second (B) is removed.
   if (getV(db, 'preset_drop_cr_b') < 1) {
     db.run("DELETE FROM ad_creatives WHERE name LIKE 'CoinRoyale test banner B%'");
