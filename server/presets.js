@@ -32,7 +32,7 @@ const PRESETS = [
   {
     // A casino with its own games, not a bookmaker: listed in "Top casinos", never used for match odds or "Bet now" boxes.
     name: 'Crypto.Games', kind: 'casino', short_code: 'CG', color: '#4a2a14', logo_url: '/assets/logos/cryptogames-coin.png', offer: 'Crypto casino games',
-    affiliate_url: 'http://crypto.games/',
+    affiliate_url: 'https://crypto.games?i=Xn41i6wkRj',
     sort_order: -5,
     rules: [['all', '*', 'allow']].concat(CG_BLOCKED.map((c) => ['country', c, 'block']))
   }
@@ -63,8 +63,8 @@ const SLOT_PRESETS = [
 const IMG_ADS = [
   { slot_key: 'infeed2', name: 'CoinRoyale test banner A', image_url: '/assets/ads/coinroyale-320x100-a.png', link_url: 'https://coinroyale.com/', alt_text: 'CoinRoyale – Bitcoin casino and sportsbook' },
   { slot_key: 'sidebar-3', name: 'CoinRoyale test banner C (sidebar)', image_url: '/assets/ads/coinroyale-300x250-c.png', link_url: 'https://coinroyale.com/', alt_text: 'CoinRoyale – Bitcoin sportsbook and casino' },
-  { slot_key: 'infeed4', name: 'Crypto.Games test banner', image_url: '/assets/ads/cryptogames-320x100-anim.webp', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED },
-  { slot_key: 'sidebar-casino', name: 'Crypto.Games test banner (sidebar)', image_url: '/assets/ads/cryptogames-300x250-anim.webp', link_url: 'http://crypto.games/', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED }
+  { slot_key: 'infeed4', name: 'Crypto.Games test banner', image_url: '/assets/ads/cryptogames-320x100-anim.webp', link_url: 'https://crypto.games?i=Xn41i6wkRj', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED },
+  { slot_key: 'sidebar-casino', name: 'Crypto.Games test banner (sidebar)', image_url: '/assets/ads/cryptogames-300x250-anim.webp', link_url: 'https://crypto.games?i=Xn41i6wkRj', alt_text: 'Crypto.Games – crypto casino', blocked: CG_BLOCKED }
 ];
 const norm = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -145,6 +145,12 @@ function install(db) {
   if (getV(db, 'preset_cg_logo') < 1) {
     db.run("UPDATE bookmakers SET logo_url='/assets/logos/cryptogames-coin.png' WHERE name='Crypto.Games' AND logo_url='/assets/logos/cryptogames.png'");
     db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('preset_cg_logo','1')");
+  }
+  // One-time: Crypto.Games affiliate link (only where the old plain link is still in place, so admin edits are kept).
+  if (getV(db, 'preset_cg_aff') < 1) {
+    db.run("UPDATE bookmakers SET affiliate_url='https://crypto.games?i=Xn41i6wkRj' WHERE name='Crypto.Games' AND affiliate_url IN ('http://crypto.games/','https://crypto.games/','')");
+    db.run("UPDATE ad_creatives SET link_url='https://crypto.games?i=Xn41i6wkRj' WHERE name LIKE 'Crypto.Games test banner%' AND link_url IN ('http://crypto.games/','https://crypto.games/')");
+    db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('preset_cg_aff','1')");
   }
   // One-time: CoinRoyale keeps one in-feed banner (A); the second (B) is removed.
   if (getV(db, 'preset_drop_cr_b') < 1) {

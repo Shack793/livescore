@@ -117,7 +117,7 @@ test('Crypto.Games is a casino: own "Top casinos" box, never in bookmaker lists 
     assert.ok(nl.casinos.includes('Crypto.Games'), 'shown in the Netherlands');
     const id = S.db.get("SELECT id FROM bookmakers WHERE name='Crypto.Games'").id;
     const r = await fetch(base + '/go/' + id + '?cc=GH&p=sidebar-casinos', { headers: UA, redirect: 'manual' });
-    assert.strictEqual(r.status, 302); assert.ok(r.headers.get('location').startsWith('http://crypto.games/'));
+    assert.strictEqual(r.status, 302); assert.ok(r.headers.get('location').startsWith('https://crypto.games?i=Xn41i6wkRj'));
   } finally { await S.close(); }
 });
 
