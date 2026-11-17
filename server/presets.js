@@ -31,7 +31,7 @@ const PRESETS = [
   },
   {
     // A casino with its own games, not a bookmaker: listed in "Top casinos", never used for match odds or "Bet now" boxes.
-    name: 'Crypto.Games', kind: 'casino', short_code: 'CG', color: '#4a2a14', logo_url: '/assets/logos/cryptogames.png', offer: 'Crypto casino games',
+    name: 'Crypto.Games', kind: 'casino', short_code: 'CG', color: '#4a2a14', logo_url: '/assets/logos/cryptogames-coin.png', offer: 'Crypto casino games',
     affiliate_url: 'http://crypto.games/',
     sort_order: -5,
     rules: [['all', '*', 'allow']].concat(CG_BLOCKED.map((c) => ['country', c, 'block']))
@@ -140,6 +140,11 @@ function install(db) {
     db.run("UPDATE ad_creatives SET image_url='/assets/ads/cryptogames-300x250-anim.webp' WHERE slot_key='sidebar-casino' AND name LIKE 'Crypto.Games test banner%' AND image_url<>''");
     db.run("UPDATE ad_creatives SET image_url='/assets/ads/cryptogames-320x100-anim.webp' WHERE slot_key='infeed4' AND name LIKE 'Crypto.Games test banner%' AND image_url<>''");
     db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('preset_cg_anim_webp','1')");
+  }
+  // One-time: Crypto.Games logo in the bookmaker lists becomes the coin from their official banner (replaces my placeholder wordmark).
+  if (getV(db, 'preset_cg_logo') < 1) {
+    db.run("UPDATE bookmakers SET logo_url='/assets/logos/cryptogames-coin.png' WHERE name='Crypto.Games' AND logo_url='/assets/logos/cryptogames.png'");
+    db.run("INSERT OR REPLACE INTO settings (key,value) VALUES ('preset_cg_logo','1')");
   }
   // One-time: CoinRoyale keeps one in-feed banner (A); the second (B) is removed.
   if (getV(db, 'preset_drop_cr_b') < 1) {
