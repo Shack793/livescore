@@ -76,8 +76,9 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
     const { leagues, teams } = store.allForSitemap(), base = cfg.siteUrl, urls = ['/'], seenC = {};
     store.sports().forEach((s) => { if (s.id !== 'football') urls.push('/' + s.id + '/'); });
     leagues.forEach((l) => { const k = l.sport + '/' + l.cslug; if (!seenC[k]) { seenC[k] = 1; urls.push('/' + k + '/'); } });
-    leagues.forEach((l) => { urls.push('/' + l.sport + '/' + l.cslug + '/' + l.slug + '/'); urls.push('/' + l.sport + '/' + l.cslug + '/' + l.slug + '/standings/'); });
-    (teams || []).forEach((t) => { if (t.slug) urls.push('/team/' + t.slug + '/' + t.id + '/'); });
+    leagues.forEach((l) => { urls.push('/' + l.sport + '/' + l.cslug + '/' + l.slug + '/'); if (l.type === 'league') urls.push('/' + l.sport + '/' + l.cslug + '/' + l.slug + '/standings/'); });
+    // team pages are listed in the English sitemap only: in the other languages they are the same page with the same team names, so listing them would just multiply the crawl
+    if (!lang) (teams || []).forEach((t) => { if (t.slug) urls.push('/team/' + t.slug + '/' + t.id + '/'); });
     // the legal pages are only written in English, so the translated copies are left out (and marked noindex)
     ['about', 'contact', 'advertise', 'responsible-gambling'].concat(lang ? [] : ['terms', 'privacy', 'cookies']).forEach((pg) => urls.push('/' + pg + '/'));
     const pre = lang ? '/' + lang : '';
@@ -106,7 +107,7 @@ function create({ cfg, db, store, sync, hub, geoip, log, hubFactory }) {
     url.searchParams.forEach((v, k) => { if (!(k in query)) query[k] = v; });
     const out = pages.handle(store, { path: url.pathname, query, cookies: ck, cc: g.code, ccSource: g.source, countryName: nameOf(g.code), now: Math.floor(Date.now() / 1000), cfg: pageCfg, lang: lang || '', needConsent: consent.has(g.code), streamOn: cfg.syncEnabled });
     if (out.redirect) return http.redirect(res, (lang ? '/' + lang : '') + out.redirect + (url.search && !out.redirect.includes('?') ? url.search : ''), out.status || 301);
-    if (out.fragment != null) return http.send(req, res, 200, lang ? i18n.localize(out.fragment, lang, {}) : out.fragment, Object.assign({ 'Content-Type': 'text/html; charset=utf-8' }, NOCACHE));
+    if (out.fragment != null) return http.send(req, res, 200, lang ? i18n.localize(out.fragment, lang, {}) : out.fragment, Object.assign({ 'Content-Type': 'text/html; charset=utf-8', 'X-Robots-Tag': 'noindex, nofollow' }, NOCACHE)); // live-update fragments are for the page's own script, never for search engines
     const hdr = Object.assign({ 'Content-Type': 'text/html; charset=utf-8' }, NOCACHE);
     if (out.page && out.page.embed) { // widgets may be framed only by the origins you list (default: the forum)
       const allow = cfg.embedOrigins.concat(cfg.forumUrl ? [new URL(cfg.forumUrl).origin] : []);

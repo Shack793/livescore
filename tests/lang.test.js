@@ -112,6 +112,9 @@ test('SEO: sitemap index, per-language sitemaps, og:locale, legal copies noindex
     assert.match(de, /\/de\/basketball\//);
     assert.doesNotMatch(de, /\/de\/(terms|privacy|cookies)\//);
     assert.doesNotMatch(de, /\/de\/de\//);
+    assert.doesNotMatch(de, /\/de\/team\//, 'team pages only in the English sitemap');
+    assert.match((await s.get('/sitemap-en.xml')).text, /\/team\//);
+    for (const c of ['en', 'de']) { const sm = (await s.get('/sitemap-' + c + '.xml')).text; for (const u of (sm.match(/<loc>[^<]+<\/loc>/g) || []).filter((v) => /\/standings\//.test(v)).slice(0, 8)) { const path = u.replace(/<\/?loc>/g, '').replace(/^https?:\/\/[^/]+/, ''); assert.strictEqual((await s.get(path + '?cc=GB')).status, 200, path); } }
     assert.match((await s.get('/sitemap-en.xml')).text, /\/terms\//);
     assert.strictEqual((await s.get('/sitemap-xx.xml')).status, 404);
     assert.match((await s.get('/?cc=NL')).text, /og:locale" content="en_GB"/);
@@ -153,5 +156,17 @@ test('Crypto.Games sidebar uses the official animated banner', async () => {
     const h = (await s.get('/?cc=NL')).text;
     assert.match(h, /src="\/assets\/ads\/cryptogames-300x250-anim\.webp"/);
     assert.doesNotMatch((await s.get('/?cc=GB')).text, /cryptogames-\d+x\d+-anim/);
+  } finally { await s.close(); }
+});
+
+test('live-update fragments are never indexable', async () => {
+  const s = await boot({});
+  try {
+    for (const u of ['/frag/favorites/?teams=1,2&cc=GB', '/es/frag/favorites/?teams=1,2&cc=GB']) {
+      const r = await s.get(u); assert.match(r.headers.get('x-robots-tag') || '', /noindex/, u);
+    }
+    const m = (await s.get('/?cc=GB')).text.match(/href="(\/match\/[^"]+)"/)[1];
+    const r2 = await s.get(m + '?frag=1&cc=GB'); assert.match(r2.headers.get('x-robots-tag') || '', /noindex/);
+    const r3 = await s.get(m + '?cc=GB'); assert.doesNotMatch(r3.headers.get('x-robots-tag') || '', /noindex/);
   } finally { await s.close(); }
 });

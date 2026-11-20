@@ -149,7 +149,7 @@ function create(db) {
     },
     allForSitemap() {
       return {
-        leagues: db.all('SELECT l.sport,l.slug,c.slug cslug FROM leagues l JOIN countries c ON c.id=l.country_id WHERE l.active=1'),
+        leagues: db.all('SELECT l.sport,l.slug,l.type,c.slug cslug FROM leagues l JOIN countries c ON c.id=l.country_id WHERE l.active=1'),
         teams: db.all('SELECT id,slug FROM teams ORDER BY id LIMIT 20000')
       };
     }
